@@ -44,6 +44,36 @@ func application(_ app: UIApplication, open url: URL, options: [UIApplication.Op
 1. Cоздайте объект PaymentDataPayer и проинициализируйте его, затем создайте объект PaymentData передайте в него объект PaymentDataPayer, сумму платежа, валюту и дополнительные данные. Если хотите иметь возможность оплаты с помощью Apple Pay, передайте также Apple pay merchant id.
 
 ```
+//содержимое позиций чека
+let item = Receipt.Item(
+            label: descript,
+            price: 300.0,
+            quantity: 3.0,
+            amount: 900.0,
+            vat: 20,
+            method: 0,
+            object: 0)
+            
+//создание объекта чека
+let receipt = Receipt(
+            items: [item],
+            taxationSystem: 0,
+            email: email,
+            phone: payerPhone,
+            isBso: false,
+            amounts: Receipt.Amounts(
+                electronic: 900.0,
+                advancePayment: 0.0,
+                credit: 0.0,
+                provision: 0.0))
+                
+//создание объекта подписки
+let recurrent = Recurrent(
+            interval: "Month",
+            period: 1,
+            customerReceipt: receipt, 
+            amount: 100)
+
 // Доп. поле, куда передается информация о плательщике. Используйте следующие параметры: FirstName, LastName, MiddleName, Birth, Street, Address, City, Country, Phone, Postcode
 let payer = PaymentDataPayer(firstName: "Test", lastName: "Testov", middleName: "Testovich", birth: "1955-02-22", address: "home 6", street: "Testovaya", city: "Moscow", country: "RU", phone: "89991234567", postcode: "12345")
     
@@ -59,7 +89,9 @@ let paymentData = PaymentData()
     .setInvoiceId("123") // Номер счета или заказа
     .setEmail("test@cp.ru") // E-mail плательщика, на который будет отправлена квитанция об оплате
     .setPayer(payer) // Информация о плательщике
-    .setJsonData(jsonData) // Любые другие данные, которые будут связаны с транзакцией               
+    .setJsonData(jsonData) // Любые другие данные, которые будут связаны с транзакцией  
+    .setReceipt(receipt) // Данные для чека
+    .setRecurrent(recurrent) // Данные для подписки           
 ```
 
 2. Создайте объект PaymentConfiguration, передайте в него объект PaymentData и ваш **Public_id** из [личного кабинета Cloudpayments](https://merchant.cloudpayments.ru/). Реализуйте протокол PaymentDelegate, чтобы узнать о завершении платежа
@@ -551,6 +583,9 @@ public protocol ThreeDsDelegate: class {
 ```
 
 ### История обновлений:
+
+#### 1.5.15
+* Добавлены объекты для создания чека и подписки
 
 #### 1.5.14
 * Исправлена проблема с логотипом TPay

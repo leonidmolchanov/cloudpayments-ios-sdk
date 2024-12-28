@@ -77,6 +77,7 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
     private var applePaymentSucceeded: Bool?
     private var resultTransaction: Transaction?
     private var errorMessage: String?
+    private var isReturningFromChildScreen: Bool = false
     
     private lazy var progressTPayView: CircleProgressView = .init(frame: .init(x: 0, y: 0, width: 28, height: 28), width: 2)
     private lazy var progressSBPView: CircleProgressView  = .init(frame: .init(x: 0, y: 0, width: 28, height: 28), width: 2)
@@ -122,6 +123,15 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
         setupProgressViewForButtons()
         showMerchantConfigurationPaymentMethods(configuration: configuration)
         paymentLabel.textColor = .mainText
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        if isReturningFromChildScreen {
+            isReturningFromChildScreen = false
+            return
+        }
     }
     
     override func viewDidDisappear(_ animated: Bool) {
@@ -550,7 +560,7 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
         
         // recurrent
         var isOnRecurrent: Bool {
-            guard let jsonData = configuration.paymentData.jsonData,
+            guard let jsonData = configuration.paymentData.getJsonData(),
                   let data = jsonData.data(using: .utf8),
                   let value = try? JSONDecoder().decode(CloudPaymentsModel.self, from: data),
                   let _ = value.cloudPayments?.recurrent

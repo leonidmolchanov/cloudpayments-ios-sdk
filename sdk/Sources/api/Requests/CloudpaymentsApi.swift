@@ -213,7 +213,7 @@ public class CloudpaymentsApi {
         let description = configuration.paymentData.description
         let currency = configuration.paymentData.currency
         let email = configuration.paymentData.email
-        let jsonData = configuration.paymentData.jsonData
+        let jsonData = configuration.paymentData.getJsonData()
         let successRedirectUrl = configuration.successRedirectUrl
         let apiUrl = configuration.apiUrl
         
@@ -261,7 +261,7 @@ public class CloudpaymentsApi {
         let currency = configuration.paymentData.currency
         let email = configuration.paymentData.email
         let sсheme: Scheme = configuration.useDualMessagePayment ? .auth : .charge
-        let jsonData = configuration.paymentData.jsonData
+        let jsonData = configuration.paymentData.getJsonData
         let successRedirectUrl = configuration.successRedirectUrl
         let failRedirectUrl = configuration.failRedirectUrl
         let apiUrl = configuration.apiUrl
@@ -312,7 +312,7 @@ public class CloudpaymentsApi {
         let currency = configuration.paymentData.currency
         let email = configuration.paymentData.email
         let sсheme: Scheme = configuration.useDualMessagePayment ? .auth : .charge
-        let jsonData = configuration.paymentData.jsonData
+        let jsonData = configuration.paymentData.getJsonData()
         let successRedirectUrl = configuration.successRedirectUrl
         let failRedirectUrl = configuration.failRedirectUrl
         let apiUrl = configuration.apiUrl
@@ -446,9 +446,12 @@ public class CloudpaymentsApi {
             "Description" : paymentData.description ?? "", // Описание оплаты в свободной форме (Необязательный)
             "AccountId" : paymentData.accountId ?? "", // Идентификатор пользователя в вашей системе (Необязательный)
             "Payer" : paymentData.payer?.dictionary as Any, // Доп. поле, куда передается информация о плательщике. (Необязательный)
-            "JsonData" : paymentData.jsonData ?? "", // Любые другие данные, которые будут связаны с транзакцией, в том числе инструкции для создания подписки или формирования онлайн-чека (Необязательный)
             "scenario" : 7
         ]
+        
+        if let jsonData = paymentData.getJsonData() {
+            parameters["JsonData"] = jsonData // Любые другие данные, которые будут связаны с транзакцией, в том числе инструкции для создания подписки или формирования онлайн-чека (Необязательный)
+        }
         
         if let saveCard = paymentData.saveCard {
             parameters["SaveCard"] = saveCard

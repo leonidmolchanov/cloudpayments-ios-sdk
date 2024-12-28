@@ -139,7 +139,7 @@ final class DemoViewController: BaseViewController {
     @objc private func run(_ sender: UIButton) {
         
         PaymentViewModel.saving(viewModels)
-        
+    
         guard let apiUrl = getText(.api),
               let publicId =  getText(.publicId),
               let amount = getText(.amount),
@@ -161,6 +161,37 @@ final class DemoViewController: BaseViewController {
               let jsonData = getText(.jsonData)
         else { return }
         
+        let item = Receipt.Item(
+            label: descript,
+            price: 300.0,
+            quantity: 3.0,
+            amount: 900.0,
+            vat: 20,
+            method: 0,
+            object: 0
+        )
+
+        let receipt = Receipt(
+            items: [item],
+            taxationSystem: 0,
+            email: email,
+            phone: payerPhone,
+            isBso: false,
+            amounts: Receipt.Amounts(
+                electronic: 900.0,
+                advancePayment: 0.0,
+                credit: 0.0,
+                provision: 0.0
+            )
+        )
+
+        let recurrent = Recurrent(
+            interval: "Month",
+            period: 1,
+            customerReceipt: receipt,
+            amount: 100
+        )
+        
         let payer = PaymentDataPayer(
             firstName: payerFirstName,
             lastName: payerLastName,
@@ -173,7 +204,7 @@ final class DemoViewController: BaseViewController {
             phone: payerPhone,
             postcode: payerPostcode
         )
-
+        
         let paymentData = PaymentData()
             .setAmount(amount)
             .setCurrency(currency)
@@ -185,7 +216,9 @@ final class DemoViewController: BaseViewController {
             .setPayer(payer)
             .setEmail(email)
             .setJsonData(jsonData)
-
+            .setReceipt(receipt)
+            .setRecurrent(recurrent)
+        
         let configuration = PaymentConfiguration(
             publicId: publicId,
             paymentData: paymentData,
