@@ -5,6 +5,8 @@
 //  Created by Sergey Iskhakov on 01.07.2021.
 //
 
+import Foundation
+
 public protocol CloudpaymentsRequestType {
     associatedtype ResponseType: Codable
     var data: CloudpaymentsRequest { get }

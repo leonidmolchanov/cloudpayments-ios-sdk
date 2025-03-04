@@ -8,7 +8,7 @@
 
 import UIKit
 
-final class ProgressTPayViewController: UIViewController {
+final class ProgressTPayViewController: BaseViewController {
     
     weak var delegate: ProgressTPayProtocol?
     private let customView = ProgressTPayView()
@@ -53,6 +53,8 @@ final class ProgressTPayViewController: UIViewController {
         super.viewDidLoad()
         customView.delegate = self
         presenter.getLink()
+        
+        LoggerService.shared.startLogging(publicId: presenter.configuration.publicId)
     }
 }
 

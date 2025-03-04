@@ -8,6 +8,7 @@
 
 import UIKit
 import Cloudpayments
+import Foundation
 
 final class DemoViewController: BaseViewController {
     
@@ -215,9 +216,9 @@ final class DemoViewController: BaseViewController {
             .setAccountId(account)
             .setPayer(payer)
             .setEmail(email)
-            .setJsonData(jsonData)
-            .setReceipt(receipt)
-            .setRecurrent(recurrent)
+//            .setJsonData(jsonData)
+//            .setReceipt(receipt)
+//            .setRecurrent(recurrent)
         
         let configuration = PaymentConfiguration(
             publicId: publicId,

@@ -96,6 +96,8 @@ final class ProgressSbpViewController: BaseViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         presentesionView(true) {}
+        
+        LoggerService.shared.startLogging(publicId: presenter.configuration.publicId)
     }
     
     //MARK: - Private methods

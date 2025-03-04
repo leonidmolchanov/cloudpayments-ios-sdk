@@ -97,6 +97,8 @@ public class PaymentForm: BaseViewController {
     public override func viewDidLoad() {
         super.viewDidLoad()
         configureThreeDsCloseButton()
+        
+        LoggerService.shared.startLogging(publicId: configuration.publicId)
     }
     
     public override func viewDidLayoutSubviews() {

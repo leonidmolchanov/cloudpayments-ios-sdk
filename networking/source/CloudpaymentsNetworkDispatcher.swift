@@ -5,6 +5,8 @@
 //  Created by Sergey Iskhakov on 01.07.2021.
 //
 
+import Foundation
+
 public protocol CloudpaymentsNetworkDispatcher {
     func dispatch(request: CloudpaymentsRequest,
                   onSuccess: @escaping (Data) -> Void,

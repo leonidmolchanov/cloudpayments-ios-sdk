@@ -6,6 +6,9 @@
 //  Copyright © 2023 Cloudpayments. All rights reserved.
 //
 
+import UIKit
+import Foundation
+
 class FooterActionView: UIView {
     @IBOutlet weak var demoActionButton: UIButton!
     @IBOutlet weak var demoActionSwitch: UISwitch!

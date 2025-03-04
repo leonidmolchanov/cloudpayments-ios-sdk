@@ -6,6 +6,7 @@
 //
 
 import CloudpaymentsNetworking
+import Foundation
 
 struct PayButtonStatus {
     var isOnSbp: Bool
@@ -17,6 +18,7 @@ struct PayButtonStatus {
     var isCvvRequired: Bool?
     var isAllowedNotSanctionedCards: Bool?
     var isQiwi: Bool?
+    var isTest: Bool?
     
     init(isOnSbp: Bool = false,
          isOnTPay: Bool = false,
@@ -25,7 +27,8 @@ struct PayButtonStatus {
          terminalUrl: String? = nil,
          isCvvRequired: Bool? = nil,
          isAllowedNotSanctionedCards: Bool? = nil,
-         isQiwi: Bool? = nil) {
+         isQiwi: Bool? = nil,
+         isTest: Bool? = nil) {
         
         self.isOnSbp = isOnSbp
         self.isOnTPay = isOnTPay
@@ -34,6 +37,7 @@ struct PayButtonStatus {
         self.isCvvRequired = isCvvRequired
         self.isAllowedNotSanctionedCards = isAllowedNotSanctionedCards
         self.isQiwi = isQiwi
+        self.isTest = isTest
     }
 }
 
@@ -76,6 +80,7 @@ extension MerchantConfigurationRequest {
             result.isCvvRequired = value.model.isCvvRequired
             result.isAllowedNotSanctionedCards = value.model.features?.isAllowedNotSanctionedCards
             result.isQiwi = value.model.features?.isQiwi
+            result.isTest = value.model.isTest
             
             for element in value.model.externalPaymentMethods {
                 guard let rawValue = element.type, let value = CaseOfBank(rawValue: rawValue) else { continue }
@@ -89,10 +94,15 @@ extension MerchantConfigurationRequest {
             
             self.payButtonStatus = result
             
+            LoggerService.shared.logApiRequest(method: "GET", url: baseURL + "merchant/configuration", success: true)
+            
             return completion(result)
             
         } onError: { error in
             print(error.localizedDescription)
+            
+            LoggerService.shared.logApiRequest(method: "GET", url: baseURL + "merchant/configuration", success: false)
+            
             let code = error._code < 0 ? -error._code : error._code
             self.payButtonStatus = code == 1009 ? nil : result
             if code == 1009 {

@@ -76,6 +76,7 @@ public class PaymentData {
     var isCvvRequired: Bool?
     var isAllowedNotSanctionedCards: Bool? = nil
     var isQiwi: Bool? = nil
+    var isTest: Bool? = nil
     
     public init() {
     }

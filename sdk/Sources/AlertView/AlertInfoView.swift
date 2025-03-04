@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Foundation
 
 final class AlertInfoView: UIView {
     private var trianleConstraint: NSLayoutConstraint!

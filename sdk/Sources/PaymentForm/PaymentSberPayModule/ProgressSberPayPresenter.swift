@@ -15,6 +15,7 @@ protocol ProgressSberPayProtocol: AnyObject {
 protocol ProgressSberPayViewControllerProtocol: AnyObject {
     func resultPayment(result: PaymentSberPayView.PaymentAction, error: String?, transactionId: Transaction?)
     func openLinkURL(url: URL)
+    var isTest: Bool? { get }
 }
 
 final class ProgressSberPayPresenter {

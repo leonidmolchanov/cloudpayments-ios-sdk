@@ -5,6 +5,8 @@
 //  Created by Cloudpayments on 27.06.2023.
 //  Copyright © 2023 Cloudpayments. All rights reserved.
 //
+import Foundation
+import UIKit
 
 class LogoHeaderView: UIView {
     // MARK: - Outlets

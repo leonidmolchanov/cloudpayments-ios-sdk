@@ -8,7 +8,7 @@
 
 import UIKit
 
-final class ProgressSberPayViewController: UIViewController {
+final class ProgressSberPayViewController: BaseViewController {
     weak var delegate: ProgressSberPayProtocol?
     private let customView = ProgressSberPayView()
     private let presenter: ProgressSberPayPresenter
@@ -52,6 +52,8 @@ final class ProgressSberPayViewController: UIViewController {
         super.viewDidLoad()
         customView.delegate = self
         presenter.getLink()
+        
+        LoggerService.shared.startLogging(publicId: presenter.configuration.publicId)
     }
 }
 
@@ -75,7 +77,22 @@ extension ProgressSberPayViewController: CustomSberPayViewDelegate {
 
 extension ProgressSberPayViewController: ProgressSberPayViewControllerProtocol {
     
+    var isTest: Bool? {
+        presenter.configuration.paymentData.isTest
+    }
+    
     func openLinkURL(url path: URL) {
+        
+        if isTest ?? false {
+            UIApplication.shared.open(path, options: [:]) { success in
+                if !success {
+                    print("Failed to open test URL")
+                    self.showAlert(title: nil, message: .banksAppNotOpen)
+                }
+            }
+            return
+        }
+        
         let sberDeeplinks = [
             "ios-app-smartonline",
             "btripsexpenses",

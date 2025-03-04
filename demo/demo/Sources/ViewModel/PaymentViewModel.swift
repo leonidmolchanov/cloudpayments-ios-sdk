@@ -6,6 +6,9 @@
 //  Copyright © 2023 Cloudpayments. All rights reserved.
 //
 
+import UIKit
+import Foundation
+
 enum PaymentViewModelType: Codable {
     case api
     case publicId

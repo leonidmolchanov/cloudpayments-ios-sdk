@@ -1,5 +1,7 @@
 
 import CloudpaymentsNetworking
+import Foundation
+import UIKit
 
 public struct ButtonConfiguration {
     public let isOnTPayButton: Bool
@@ -7,13 +9,15 @@ public struct ButtonConfiguration {
     public let isOnSberPayButton: Bool
     public let successRedirectUrl: String?
     public let failRedirectUrl: String?
+    let isTest: Bool?
     
-    init(isOnTPayButton: Bool, isOnSbpButton: Bool, isOnSberPayButton: Bool, successRedirectUrl: String? = nil, failRedirectUrl: String? = nil) {
+    init(isOnTPayButton: Bool, isOnSbpButton: Bool, isOnSberPayButton: Bool, successRedirectUrl: String? = nil, failRedirectUrl: String? = nil, isTest: Bool? = nil) {
         self.isOnTPayButton = isOnTPayButton
         self.isOnSbpButton = isOnSbpButton
         self.isOnSberPayButton = isOnSberPayButton
         self.successRedirectUrl = successRedirectUrl
         self.failRedirectUrl = failRedirectUrl
+        self.isTest = isTest
     }
 }
 
@@ -125,8 +129,14 @@ public class CloudpaymentsApi {
 
         request.execute { result in
             completion(result.model, result.success)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
         } onError: { error in
             print(error)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+            
             completion(nil, false)
         }
     }
@@ -140,7 +150,14 @@ public class CloudpaymentsApi {
                                         paymentData: paymentData)
         ChargeRequest(params: patch(params: parameters), headers: getDefaultHeaders(), apiUrl: apiUrl).execute(keyDecodingStrategy: .convertToUpperCamelCase, onSuccess: { response in
             completion(response, nil)
+            
+            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/charge", success: true)
+            
+            
         }, onError: { error in
+            
+            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/charge", success: false)
+            
             completion(nil, error)
         })
     }
@@ -156,7 +173,12 @@ public class CloudpaymentsApi {
             response in
             completion(response, nil) 
             
+            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/auth", success: true)
+            
         }, onError: { error in
+            
+            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/auth", success: false)
+            
             completion(nil, error)
         })
     }
@@ -193,13 +215,19 @@ public class CloudpaymentsApi {
                                                 isOnSbpButton: isOnSbp,
                                                 isOnSberPayButton: isOnSberPay,
                                                 successRedirectUrl: result.model.terminalFullUrl,
-                                                failRedirectUrl: result.model.terminalFullUrl)
+                                                failRedirectUrl: result.model.terminalFullUrl,
+                                                isTest: result.model.isTest)
             
             completion(value)
             
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
         } onError: { error in
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+            
             print(error.localizedDescription)
-            return completion(.init(isOnTPayButton: false, isOnSbpButton: false, isOnSberPayButton: false))
+            return completion(.init(isOnTPayButton: false, isOnSbpButton: false, isOnSberPayButton: false, isTest: false))
         }
     }
     
@@ -244,7 +272,13 @@ public class CloudpaymentsApi {
         
         request.execute { result in
             handler(result.model)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
         } onError: { error in
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+            
             print(error.localizedDescription)
             handler(nil)
         }
@@ -261,7 +295,7 @@ public class CloudpaymentsApi {
         let currency = configuration.paymentData.currency
         let email = configuration.paymentData.email
         let sсheme: Scheme = configuration.useDualMessagePayment ? .auth : .charge
-        let jsonData = configuration.paymentData.getJsonData
+        let jsonData = configuration.paymentData.getJsonData()
         let successRedirectUrl = configuration.successRedirectUrl
         let failRedirectUrl = configuration.failRedirectUrl
         let apiUrl = configuration.apiUrl
@@ -291,11 +325,17 @@ public class CloudpaymentsApi {
         }
         
         let request = TPayLinkRequest(params: params,
-                                        apiUrl: apiUrl)
+                                      apiUrl: apiUrl)
         
         request.execute { result in
             handler(result.model)
+                    
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
         } onError: { error in
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+            
             print(error.localizedDescription)
             handler(nil)
         }
@@ -346,15 +386,21 @@ public class CloudpaymentsApi {
         
         request.execute { result in
             handler(result.model)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
         } onError: { error in
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+            
             print(error.localizedDescription)
             handler(nil)
         }
     }
     
     public class func getWaitStatus(_ configuration: PaymentConfiguration,
-                                 _ transactionId: Int64,
-                                 _ publicId: String) {
+                                    _ transactionId: Int64,
+                                    _ publicId: String) {
         
         let apiUrl = configuration.apiUrl
         
@@ -369,8 +415,13 @@ public class CloudpaymentsApi {
         request.execute { value in
             NotificationCenter.default.post(name: ObserverKeys.generalObserver.key,
                                             object: value)
-
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
         } onError: { error in
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+            
             print(error.localizedDescription)
             NotificationCenter.default.post(name: ObserverKeys.generalObserver.key,
                                             object: error)
@@ -405,6 +456,8 @@ public class CloudpaymentsApi {
                     if !items.isEmpty, let params = items.first?.split(separator: "="), params.count == 2 {
                         reasonCode = String(params[1]).removingPercentEncoding
                     }
+                    
+                    LoggerService.shared.logApiRequest(method: request.httpMethod ?? "", url: url.absoluteString, success: true)
 
                     if url.absoluteString.starts(with: self.threeDsSuccessURL) {
                         DispatchQueue.main.async {
@@ -418,6 +471,8 @@ public class CloudpaymentsApi {
                             let r = ThreeDsResponse.init(success: false, reasonCode: reasonCode)
                             completion(r)
                         }
+                        
+                        LoggerService.shared.logApiRequest(method: request.httpMethod ?? "", url: url.absoluteString, success: false)
                         
                         return false
                     } else {

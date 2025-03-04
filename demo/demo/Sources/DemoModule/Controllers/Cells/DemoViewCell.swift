@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import Foundation
 
 enum ColorType: String {
     case blue = "color_blue"

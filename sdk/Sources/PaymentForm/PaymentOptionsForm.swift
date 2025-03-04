@@ -208,6 +208,10 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
                     configuration.paymentData.isQiwi = isQiwi
                 }
                 
+                if let isTest = response?.isTest {
+                    configuration.paymentData.isTest = isTest
+                }
+                
                 guard let self = self, let status = response else {
                     self?.showAlert(title: .noData, message: .noConnection) {
                         self?.presentesionView(false) {
