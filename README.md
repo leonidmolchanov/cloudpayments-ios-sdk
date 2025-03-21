@@ -587,6 +587,9 @@ public protocol ThreeDsDelegate: class {
 
 ### История обновлений:
 
+#### 1.5.17
+* Исправлены делегаты paymentFormWillHide и paymentFormDidHide
+
 #### 1.5.16
 * Добавлена возможность интеграции через Swift Package Manager
 

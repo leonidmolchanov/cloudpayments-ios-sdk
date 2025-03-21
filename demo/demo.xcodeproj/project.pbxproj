@@ -17,8 +17,6 @@
 		13B49EC7224A4795001F85CF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B49EC6224A4795001F85CF /* Assets.xcassets */; };
 		13B49ECA224A4795001F85CF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 13B49EC8224A4795001F85CF /* LaunchScreen.storyboard */; };
 		23649E9D2B0DF1A100051E98 /* TestSinglePaymentMethodsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23649E9C2B0DF1A100051E98 /* TestSinglePaymentMethodsController.swift */; };
-		23C9092A2D64F1C20020ADB2 /* Cloudpayments in Frameworks */ = {isa = PBXBuildFile; productRef = 23C909292D64F1C20020ADB2 /* Cloudpayments */; };
-		23C9092C2D64F1C20020ADB2 /* CloudpaymentsNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 23C9092B2D64F1C20020ADB2 /* CloudpaymentsNetworking */; };
 		831A1D222538413A003CA251 /* BaseViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 831A1D212538413A003CA251 /* BaseViewController.swift */; };
 		E86315D12A4B24E80041F778 /* LogoHeaderView.xib in Resources */ = {isa = PBXBuildFile; fileRef = E86315D02A4B24E80041F778 /* LogoHeaderView.xib */; };
 		E86315D42A4B29E10041F778 /* FooterActionView.xib in Resources */ = {isa = PBXBuildFile; fileRef = E86315D32A4B29E10041F778 /* FooterActionView.xib */; };
@@ -61,8 +59,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				23C9092A2D64F1C20020ADB2 /* Cloudpayments in Frameworks */,
-				23C9092C2D64F1C20020ADB2 /* CloudpaymentsNetworking in Frameworks */,
 				08D673FA470DE48EE0380744 /* Pods_demo.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -280,8 +276,6 @@
 			);
 			name = demo;
 			packageProductDependencies = (
-				23C909292D64F1C20020ADB2 /* Cloudpayments */,
-				23C9092B2D64F1C20020ADB2 /* CloudpaymentsNetworking */,
 			);
 			productName = demo;
 			productReference = 13B49EBC224A4793001F85CF /* demo.app */;
@@ -623,17 +617,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		23C909292D64F1C20020ADB2 /* Cloudpayments */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Cloudpayments;
-		};
-		23C9092B2D64F1C20020ADB2 /* CloudpaymentsNetworking */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = CloudpaymentsNetworking;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 13B49EB4224A4793001F85CF /* Project object */;
 }
