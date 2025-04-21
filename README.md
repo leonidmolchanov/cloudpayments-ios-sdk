@@ -587,6 +587,9 @@ public protocol ThreeDsDelegate: class {
 
 ### История обновлений:
 
+#### 1.5.18
+* Обновлены схемы для SberPay, исправлена передача параметров startDate и vat
+
 #### 1.5.17
 * Исправлены делегаты paymentFormWillHide и paymentFormDidHide
 

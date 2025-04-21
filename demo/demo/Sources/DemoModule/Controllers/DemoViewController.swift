@@ -167,7 +167,6 @@ final class DemoViewController: BaseViewController {
             price: 300.0,
             quantity: 3.0,
             amount: 900.0,
-            vat: 20,
             method: 0,
             object: 0
         )
@@ -216,7 +215,7 @@ final class DemoViewController: BaseViewController {
             .setAccountId(account)
             .setPayer(payer)
             .setEmail(email)
-//            .setJsonData(jsonData)
+            .setJsonData(jsonData)
 //            .setReceipt(receipt)
 //            .setRecurrent(recurrent)
         

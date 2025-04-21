@@ -21,11 +21,11 @@ public struct Receipt: Codable {
         public let price: Double
         public let quantity: Double
         public let amount: Double
-        public let vat: Int
+        public let vat: Int?
         public let method: Int
         public let object: Int
         
-        public init(label: String, price: Double, quantity: Double, amount: Double, vat: Int, method: Int, object: Int) {
+        public init(label: String, price: Double, quantity: Double, amount: Double, vat: Int? = nil, method: Int, object: Int) {
             self.label = label
             self.price = price
             self.quantity = quantity
@@ -57,7 +57,7 @@ public struct Receipt: Codable {
         }
     }
 
-    public init(items: [Item], taxationSystem: Int, email: String, phone: String, isBso: Bool, amounts: Amounts) {
+    public init(items: [Item], taxationSystem: Int, email: String = "", phone: String = "", isBso: Bool = false, amounts: Amounts? = nil) {
         self.items = items
         self.taxationSystem = taxationSystem
         self.email = email
@@ -68,15 +68,19 @@ public struct Receipt: Codable {
 }
 
 public struct Recurrent: Codable {
-    public let amount: Int
+    public let amount: Int?
     public let interval: String
     public let period: Int
+    public let startDate: String?
+    public let maxPeriods: Int?
     public let customerReceipt: Receipt?
     
-    public init(interval: String, period: Int, customerReceipt: Receipt, amount: Int) {
+    public init(interval: String, period: Int, customerReceipt: Receipt? = nil, amount: Int? = nil, startDate: String? = nil, maxPeriods: Int? = nil) {
         self.interval = interval
         self.period = period
         self.customerReceipt = customerReceipt
         self.amount = amount
+        self.startDate = startDate
+        self.maxPeriods = maxPeriods
     }
 }

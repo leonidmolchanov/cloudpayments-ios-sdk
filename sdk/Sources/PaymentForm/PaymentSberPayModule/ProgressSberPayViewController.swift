@@ -96,8 +96,8 @@ extension ProgressSberPayViewController: ProgressSberPayViewControllerProtocol {
         let sberDeeplinks = [
             "ios-app-smartonline",
             "btripsexpenses",
-            "sbolpay",
-            "budgetonline-ios"
+            "budgetonline-ios",
+            "app-online-ios"
         ]
         
         let urlString = path.absoluteString
@@ -114,7 +114,7 @@ extension ProgressSberPayViewController: ProgressSberPayViewControllerProtocol {
             var sberComponents = urlComponents
             sberComponents.scheme = scheme
             
-            if scheme == "ios-app-smartonline" || scheme == "btripsexpenses" || scheme == "budgetonline-ios" {
+            if scheme == "ios-app-smartonline" || scheme == "btripsexpenses" || scheme == "budgetonline-ios" || scheme == "app-online-ios" {
                 let originalHost = sberComponents.host ?? ""
                 let originalPath = sberComponents.path
                 sberComponents.host = "sbolpay"
