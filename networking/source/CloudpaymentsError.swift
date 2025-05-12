@@ -8,7 +8,8 @@
 
 public class CloudpaymentsError: Error {
     public static let defaultCardError = CloudpaymentsError.init(message: "Unable to determine bank")
-    
+    public static let networkError = CloudpaymentsError(message: "Ошибка запроса")
+    public static let incorrectResponseJson = CloudpaymentsError(message: "Некорректный ответ JSON")
     public static let parseError = CloudpaymentsError.init(message: "Не удалось получить ответ")
     
     public let message: String

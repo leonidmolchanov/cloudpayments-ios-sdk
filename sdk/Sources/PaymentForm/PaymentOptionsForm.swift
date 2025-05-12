@@ -77,7 +77,6 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
     private var applePaymentSucceeded: Bool?
     private var resultTransaction: Transaction?
     private var errorMessage: String?
-    private var isReturningFromChildScreen: Bool = false
     
     private lazy var progressTPayView: CircleProgressView = .init(frame: .init(x: 0, y: 0, width: 28, height: 28), width: 2)
     private lazy var progressSBPView: CircleProgressView  = .init(frame: .init(x: 0, y: 0, width: 28, height: 28), width: 2)
@@ -121,17 +120,12 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
         setupAlertView()
         
         setupProgressViewForButtons()
-        showMerchantConfigurationPaymentMethods(configuration: configuration)
+        createIntentMethod(configuration: configuration)
         paymentLabel.textColor = .mainText
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        
-        if isReturningFromChildScreen {
-            isReturningFromChildScreen = false
-            return
-        }
     }
     
     override func viewDidDisappear(_ animated: Bool) {
@@ -142,9 +136,9 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
         super.viewDidAppear(animated)
         footer.isSelectedSave = configuration.paymentData.saveCard
         
-         if !footer.saveCardButtonView {
-             self.configuration.paymentData.saveCard = footer.isSelectedSave
-         }
+        if !footer.saveCardButtonView {
+            self.configuration.paymentData.saveCard = footer.isSelectedSave
+        }
     }
     
     private func setupAlertView() {
@@ -178,104 +172,157 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
         progressSBPView.progressColor = .white
     }
     
-    private func showMerchantConfigurationPaymentMethods(configuration: PaymentConfiguration) {
-        let terminalPublicId = configuration.publicId
-        let baseUrl = configuration.apiUrl
-        
-        guard let status = MerchantConfigurationRequest.payButtonStatus else {
-            loaderView.startAnimated(LoaderType.loaderText.toString())
+    private func createIntentMethod(configuration: PaymentConfiguration) {
+        if !configuration.paymentData.paymentLinks.isEmpty {
+            if let saveCardState = configuration.paymentData.intentSaveCardState,
+               let savedTokenize = configuration.paymentData.savedTokenize {
+                print("Восстанавливаем UI по сохранённым данным:")
+                print("intentSaveCardState = \(saveCardState.rawValue)")
+                print("savedTokenize = \(savedTokenize)")
+                
+                setupSaveCardMethod(
+                    isSaveCard: saveCardState.rawValue,
+                    tokenize: savedTokenize
+                )
+            }
             
-            MerchantConfigurationRequest.getMerchantConfiguration(baseURL: baseUrl, terminalPublicId: terminalPublicId) { [weak self] response in
-                
-                if (configuration.successRedirectUrl?.isEmpty ?? true),
-                   let successRedirectUrl = response?.successRedirectUrl {
-                    configuration.successRedirectUrl = successRedirectUrl
+            updateButtonStatus(with: nil)
+            loaderView(isOn: false) {
+                self.presentesionView(true) { }
+            }
+            return
+        }
+        
+        loaderView.startAnimated(LoaderType.loaderText.toString())
+        
+        CloudpaymentsApi.getPublicKey { [weak self] publicKey, _ in
+            guard let self = self else { return }
+            
+            guard let pem = publicKey?.Pem, let version = publicKey?.Version else {
+                DispatchQueue.main.async {
+                    self.loaderView(isOn: false) {
+                        self.showAlert(title: .errorWord, message: .errorGetPemAndVersion) {
+                            self.dismiss(animated: true)
+                        }
+                    }
                 }
+                return
+            }
+            
+            configuration.paymentData.pem = pem
+            configuration.paymentData.version = version
+            
+            CloudpaymentsApi.createIntent(with: configuration) { [weak self] responseIntent in
+                guard let self = self else { return }
                 
-                if (configuration.failRedirectUrl?.isEmpty ?? true), let failRedirectUrl = response?.failRedirectUrl {
-                    configuration.failRedirectUrl = failRedirectUrl
-                }
-                
-                if let isCvvRequired = response?.isCvvRequired {
-                    configuration.paymentData.isCvvRequired = isCvvRequired
-                }
-                
-                if let isAllowedNotSanctionedCards = response?.isAllowedNotSanctionedCards {
-                    configuration.paymentData.isAllowedNotSanctionedCards = isAllowedNotSanctionedCards
-                }
-                
-                if let isQiwi = response?.isQiwi {
-                    configuration.paymentData.isQiwi = isQiwi
-                }
-                
-                if let isTest = response?.isTest {
-                    configuration.paymentData.isTest = isTest
-                }
-                
-                guard let self = self, let status = response else {
-                    self?.showAlert(title: .noData, message: .noConnection) {
-                        self?.presentesionView(false) {
-                            self?.dismiss(animated: false)
+                guard let intent = responseIntent else {
+                    DispatchQueue.main.async {
+                        self.loaderView(isOn: false) {
+                            self.showAlert(title: .errorWord, message: .errorConfiguration) {
+                                self.dismiss(animated: true)
+                            }
                         }
                     }
                     return
                 }
-                self.resultPayButtons(status)
+                
+                configuration.paymentData.intentId = intent.id
+                configuration.paymentData.secret = intent.secret
+                
+                let terminalUrl = intent.terminalInfo?.terminalFullUrl
+                configuration.paymentData.terminalFullUrl = terminalUrl
+                
+                if configuration.successRedirectUrl.isNilOrEmpty {
+                    configuration.successRedirectUrl = terminalUrl
+                }
+                if configuration.failRedirectUrl.isNilOrEmpty {
+                    configuration.failRedirectUrl = terminalUrl
+                }
+                
+                let needPatch = intent.successRedirectUrl.isNilOrEmpty || intent.failRedirectUrl.isNilOrEmpty
+                
+                if needPatch {
+                    let patch = PatchBuilder.make {
+                        if let successRedirectUrl = configuration.successRedirectUrl {
+                            $0.replace("/successRedirectUrl", value: successRedirectUrl)
+                        }
+                        if let failRedirectUrl = configuration.failRedirectUrl {
+                            $0.replace("/failRedirectUrl", value: failRedirectUrl)
+                        }
+                    }
+                    
+                    CloudpaymentsApi.intentPatchById(configuration: configuration, patches: patch) { result in
+                        print("Результат после PATCH - successRedirectUrl: \(String(describing: result?.successRedirectUrl)) и failRedirectUrl: \(String(describing: result?.failRedirectUrl))")
+                    }
+                }
+                
+                let isSaveCard = intent.terminalInfo?.features?.isSaveCard
+                let tokenize = intent.tokenize
+                
+                if let rawState = isSaveCard, let saveState = IntentSaveCardState(rawValue: rawState) {
+                    configuration.paymentData.intentSaveCardState = saveState
+                    configuration.paymentData.savedTokenize = tokenize
+                    setupSaveCardMethod(isSaveCard: saveState.rawValue, tokenize: tokenize)
+                } else {
+                    setupSaveCardMethod(isSaveCard: nil, tokenize: nil)
+                }
+                
+                updateButtonStatus(with: intent)
+                loaderView(isOn: false) { self.presentesionView(true) {} }
             }
-            return
-        }
-        resultPayButtons(status, delay: false)
-    }
-    
-    @objc private func updateButtons(_  observer: NSNotification) {
-        
-        self.currentContainerHeight = 0
-        
-        UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut) {
-            self.heightConstraint.isActive = false
-            self.heightConstraint.constant = 0
-            self.view.backgroundColor = .init(red: 1, green: 1, blue: 1, alpha: 0)
-            self.view.layoutIfNeeded()
-        } completion: { _ in
-            self.loaderView.isHidden = false
-            self.loaderView.alpha = 1
-            self.showMerchantConfigurationPaymentMethods(configuration: self.configuration)
         }
     }
     
-    private func resultPayButtons(_  status: PayButtonStatus, delay: Bool = true) {
+    private func updateButtonStatus(with responseIntent: PaymentIntentResponse?) {
+        let supportedTypes: [PaymentMethodType: UIButton] = [
+            .tpay: tPayButton,
+            .sbp: sbpButton,
+            .sberPay: sberPayButton
+        ]
         
-        if configuration.paymentData.splits.isNilOrEmpty {
-            tPayButton.superview?.isHidden = !status.isOnTPay
-            tPayButton.isHidden = !status.isOnTPay
-            
-            sbpButton.superview?.isHidden = !status.isOnSbp
-            sbpButton.isHidden = !status.isOnSbp
-            
-            sberPayButton.superview?.isHidden = !status.isOnSberPay
-            sberPayButton.isHidden = !status.isOnSberPay
+        if let paymentMethods = responseIntent?.paymentMethods {
+            for method in paymentMethods {
+                guard let typeString = method.type,
+                      let type = PaymentMethodType(rawValue: typeString),
+                      let button = supportedTypes[type] else { continue }
+                
+                button.isHidden = false
+                button.superview?.isHidden = false
+                
+                switch type {
+                case .tpay:
+                    if let link = method.link {
+                        configuration.paymentData.paymentLinks[type.rawValue] = link
+                    }
+                case .sberPay:
+                    if let data = method.data {
+                        configuration.paymentData.sberPayData = data
+                    }
+                case .sbp:
+                    if let banks = method.banks, let link = method.link {
+                        configuration.paymentData.paymentLinks[type.rawValue] = link
+                        configuration.paymentData.sbpBanks = banks
+                    }
+                }
+            }
         } else {
-            tPayButton.superview?.isHidden = true
-            tPayButton.isHidden = true
-            
-            sbpButton.superview?.isHidden = true
-            sbpButton.isHidden = true
-            
-            sberPayButton.superview?.isHidden = true
-            sberPayButton.isHidden = true
-        }
-        
-        self.setupCheckbox(status.isSaveCard)
-        view.layoutIfNeeded()
-        view.layoutMarginsDidChange()
-        
-        let deadline: DispatchTime = delay ? (.now() + 3) : .now()
-        
-        DispatchQueue.main.asyncAfter(deadline: deadline) {
-            self.loaderView(isOn: false) {
-                self.presentesionView(true) { }
+            for (type, button) in supportedTypes {
+                let hasLink = configuration.paymentData.paymentLinks[type.rawValue].hasData
+                let hasSber = configuration.paymentData.sberPayData.hasData
+                let hasBanks = configuration.paymentData.sbpBanks.hasData
+                
+                let show = switch type {
+                case .tpay: hasLink
+                case .sberPay: hasSber
+                case .sbp: hasBanks
+                }
+                
+                button.isHidden = !show
+                button.superview?.isHidden = !show
             }
         }
+        
+        view.layoutIfNeeded()
     }
     
     @IBAction func dismissModalButtonTapped(_ sender: UIButton) {
@@ -371,7 +418,7 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
         
         tPayButton.addTarget(self, action: #selector(tPayButtonAction(_:)), for: .touchUpInside)
         tPayButton.setImage(.iconTPay, for: .normal)
-    
+        
         isReceiptButtonEnabled(configuration.requireEmail)
         
         sbpButton.semanticContentAttribute = .forceRightToLeft
@@ -525,8 +572,20 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
     @objc private func saveButtonAction(_ sender: UIButton) {
         sender.isSelected.toggle()
         
-        let isSelect = sender.isSelected
-        self.configuration.paymentData.saveCard = isSelect
+        let isSelected = sender.isSelected
+        configuration.paymentData.saveCard = isSelected
+        
+        if case .optional = configuration.paymentData.intentSaveCardState {
+            let patch = PatchBuilder.make {
+                $0.replace("/tokenize", value: isSelected)
+            }
+            
+            CloudpaymentsApi.intentPatchById(configuration: configuration, patches: patch) { _ in
+                print("PATCH tokenize обновлён")
+                
+                self.configuration.paymentData.savedTokenize = isSelected
+            }
+        }
     }
     
     @objc private func infoButtonAction(_ sender: UIButton) {
@@ -556,41 +615,42 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
         }
     }
     
-    //MARK: - setup Checkbox
+    //MARK: - setup SaveCard
     
-    private func setupCheckbox(_ isSaveCard: Int?) {
+    private func setupSaveCardMethod(isSaveCard: String?, tokenize: Bool?) {
+        print("setupCheckbox вызывается с:")
+        print("isSaveCard = \(String(describing: isSaveCard))")
+        print("tokenize = \(String(describing: tokenize.map { "\($0)" }))")
         
-        // accountId
-        let accountId = configuration.paymentData.accountId
-        let isOnAccountId = accountId != nil
-        
-        // recurrent
-        var isOnRecurrent: Bool {
-            guard let jsonData = configuration.paymentData.getJsonData(),
-                  let data = jsonData.data(using: .utf8),
-                  let value = try? JSONDecoder().decode(CloudPaymentsModel.self, from: data),
-                  let _ = value.cloudPayments?.recurrent
-            else { return false }
-            return true
+        guard let isSaveCard = isSaveCard,
+              let saveCardState = IntentSaveCardState(rawValue: isSaveCard) else {
+            print("Некорректный isSaveCard, скрываем UI")
+            footer.setup(.none)
+            configuration.paymentData.saveCard = nil
+            return
         }
         
-        var checkBox: SaveCardState {
-            switch (isOnAccountId, isOnRecurrent, isSaveCard) {
-            case (false, _, _): return .none
-            case (_, _, 0): return .none
-            case (true, true, 1): return .isOnHint
-            case (true, true, 2): return .isOnHint
-            case (true, true, 3): return .isOnHint
-            case (true, false, 1): return .none
-            case (true, false, 2): return .isOnCheckbox
-            case (true, false, 3): return .isOnHint
-            default: return .none
-            }
-        }
+        configuration.paymentData.intentSaveCardState = saveCardState
         
-        footer.setup(checkBox)
+        switch saveCardState {
+        case .optional:
+            let isSelected = tokenize ?? false
+            print("Optional: показываем тоггл, состояние: \(isSelected)")
+            footer.setup(.isOnCheckbox, isSelected: isSelected)
+            configuration.paymentData.saveCard = isSelected
+            
+        case .force:
+            print("Force: карта всегда сохраняется")
+            footer.setup(.isOnHint)
+            footer.isSelectedSave = true
+            configuration.paymentData.saveCard = true
+            
+        case .classic, .new:
+            print("Classic/new: тоггл не показывается")
+            footer.setup(.none)
+            configuration.paymentData.saveCard = nil
+        }
     }
-    
     
     //MARK: - Keyboard
     
@@ -704,82 +764,82 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
     }
     
     func paymentAuthorizationViewControllerDidFinish(_ controller: PKPaymentAuthorizationViewController) {
-        controller.dismiss(animated: true) { [weak self] in
-            guard let self = self else {
-                return
-            }
-            if let status = self.applePaymentSucceeded {
-                let state: PaymentProcessForm.State
-                
-                if status {
-                    state = .succeeded(self.resultTransaction)
-                } else {
-                    state = .failed(self.errorMessage)
-                }
-                
-                let parent = self.presentingViewController
-                self.dismiss(animated: true) { [weak self] in
-                    guard let self = self else {
-                        return
-                    }
-                    if parent != nil {
-                        PaymentProcessForm.present(with: self.configuration, cryptogram: nil, email: nil, state: state, from: parent!, completion: nil)
-                    }
-                }
-            }
-        }
+        //                controller.dismiss(animated: true) { [weak self] in
+        //                    guard let self = self else {
+        //                        return
+        //                    }
+        //                    if let status = self.applePaymentSucceeded {
+        //                        let state: PaymentProcessForm.State
+        //
+        //                        if status {
+        //                            state = .succeeded(self.resultTransaction)
+        //                        } else {
+        //                            state = .failed(self.errorMessage)
+        //                        }
+        //
+        //                        let parent = self.presentingViewController
+        //                        self.dismiss(animated: true) { [weak self] in
+        //                            guard let self = self else {
+        //                                return
+        //                            }
+        //                            if parent != nil {
+        //                                PaymentProcessForm.present(with: self.configuration, cryptogram: nil, email: nil, state: state, from: parent!, completion: nil)
+        //                            }
+        //                        }
+        //                    }
+        //                }
     }
     
-    func paymentAuthorizationViewController(_ controller: PKPaymentAuthorizationViewController, didAuthorizePayment payment: PKPayment, handler completion: @escaping (PKPaymentAuthorizationResult) -> Void) {
-        
-        if let cryptogram = payment.convertToString() {
-            if (configuration.useDualMessagePayment) {
-                self.auth(cardCryptogramPacket: cryptogram, email: nil) { [weak self] status, canceled, transaction, errorMessage in
-                    guard let self = self else {
-                        return
-                    }
-                    self.applePaymentSucceeded = status
-                    self.resultTransaction = transaction
-                    self.errorMessage = errorMessage
-                    
-                    if status {
-                        completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
-                    } else {
-                        var errors = [Error]()
-                        if let message = errorMessage {
-                            let userInfo = [NSLocalizedDescriptionKey: message]
-                            let error = PKPaymentError(.unknownError, userInfo: userInfo)
-                            errors.append(error)
-                        }
-                        completion(PKPaymentAuthorizationResult(status: .failure, errors: errors))
-                    }
-                }
-            } else {
-                self.charge(cardCryptogramPacket: cryptogram, email: nil) { [weak self] status, canceled, transaction, errorMessage in
-                    guard let self = self else {
-                        return
-                    }
-                    self.applePaymentSucceeded = status
-                    self.resultTransaction = transaction
-                    self.errorMessage = errorMessage
-                    
-                    if status {
-                        completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
-                    } else {
-                        var errors = [Error]()
-                        if let message = errorMessage {
-                            let userInfo = [NSLocalizedDescriptionKey: message]
-                            let error = PKPaymentError(.unknownError, userInfo: userInfo)
-                            errors.append(error)
-                        }
-                        completion(PKPaymentAuthorizationResult(status: .failure, errors: errors))
-                    }
-                }
-            }
-        } else {
-            completion(PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.failure, errors: []))
-        }
-    }
+    //    func paymentAuthorizationViewController(_ controller: PKPaymentAuthorizationViewController, didAuthorizePayment payment: PKPayment, handler completion: @escaping (PKPaymentAuthorizationResult) -> Void) {
+    //
+    //        if let cryptogram = payment.convertToString() {
+    //            if (configuration.useDualMessagePayment) {
+    //                self.auth(cardCryptogramPacket: cryptogram, email: nil) { [weak self] status, canceled, transaction, errorMessage in
+    //                    guard let self = self else {
+    //                        return
+    //                    }
+    //                    self.applePaymentSucceeded = status
+    //                    self.resultTransaction = transaction
+    //                    self.errorMessage = errorMessage
+    //
+    //                    if status {
+    //                        completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
+    //                    } else {
+    //                        var errors = [Error]()
+    //                        if let message = errorMessage {
+    //                            let userInfo = [NSLocalizedDescriptionKey: message]
+    //                            let error = PKPaymentError(.unknownError, userInfo: userInfo)
+    //                            errors.append(error)
+    //                        }
+    //                        completion(PKPaymentAuthorizationResult(status: .failure, errors: errors))
+    //                    }
+    //                }
+    //            } else {
+    //                self.charge(cardCryptogramPacket: cryptogram, email: nil) { [weak self] status, canceled, transaction, errorMessage in
+    //                    guard let self = self else {
+    //                        return
+    //                    }
+    //                    self.applePaymentSucceeded = status
+    //                    self.resultTransaction = transaction
+    //                    self.errorMessage = errorMessage
+    //
+    //                    if status {
+    //                        completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
+    //                    } else {
+    //                        var errors = [Error]()
+    //                        if let message = errorMessage {
+    //                            let userInfo = [NSLocalizedDescriptionKey: message]
+    //                            let error = PKPaymentError(.unknownError, userInfo: userInfo)
+    //                            errors.append(error)
+    //                        }
+    //                        completion(PKPaymentAuthorizationResult(status: .failure, errors: errors))
+    //                    }
+    //                }
+    //            }
+    //        } else {
+    //            completion(PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.failure, errors: []))
+    //        }
+    //    }
 }
 
 extension PaymentOptionsForm: UITextFieldDelegate {
@@ -829,16 +889,30 @@ extension PaymentOptionsForm: UITextFieldDelegate {
     }
     
     func textFieldDidEndEditing(_ textField: UITextField) {
-        
-        let emailIsValid = emailTextField.text?.emailIsValid()
-        
-        if emailIsValid == false {
+        guard let currentEmail = emailTextField.text, currentEmail.emailIsValid() else {
             setButtonsAndContainersEnabled(isEnabled: false)
-            showErrorStateForEmail(with: EmailType.incorrectEmail.toString() , borderView: .errorBorder, textColor: .errorBorder, placeholderColor: .errorBorder)
-        } else {
-            footer.emailBorderColor = UIColor.border
-            setButtonsAndContainersEnabled(isEnabled: true)
+            showErrorStateForEmail(
+                with: EmailType.incorrectEmail.toString(),
+                borderView: .errorBorder,
+                textColor: .errorBorder,
+                placeholderColor: .errorBorder
+            )
+            return
         }
+        
+        footer.emailBorderColor = UIColor.border
+        setButtonsAndContainersEnabled(isEnabled: true)
+        
+        configuration.paymentData.email = currentEmail
+        
+        let patch = PatchBuilder.make {
+            $0.replace("/receiptEmail", value: currentEmail)
+        }
+        
+        CloudpaymentsApi.intentPatchById(configuration: configuration, patches: patch) { result in
+            print("Результат после PATCH receiptEmail: \(String(describing: result?.receiptEmail))")
+        }
+        
     }
     
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {

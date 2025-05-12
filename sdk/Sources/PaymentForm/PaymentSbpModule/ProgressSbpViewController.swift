@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import SafariServices
 
 protocol ProgressSbpPresenterProtocol: AnyObject {
     func resultPayment(_ result: PaymentSbpView.PaymentAction, error: String?, transactionId: Int64?)
@@ -31,12 +32,6 @@ final class ProgressSbpViewController: BaseViewController {
     override var isKeyboardShowing: Bool {
         didSet {
             tapGestureRecognizer.cancelsTouchesInView = isKeyboardShowing
-        }
-    }
-    
-    var loading: Bool = false {
-        didSet {
-            loaderView.isHidden = !loading
         }
     }
     
@@ -74,7 +69,6 @@ final class ProgressSbpViewController: BaseViewController {
         super.loadView()
         setupConstraintsAndView()
         
-        view.addSubview(loaderView)
         loaderView.frame = view.bounds
         loaderView.fullConstraint()
         loaderView.layoutSubviews()
@@ -86,7 +80,7 @@ final class ProgressSbpViewController: BaseViewController {
         super.viewDidLoad()
         contentView.delegate = self
         view.backgroundColor = .init(red: 1, green: 1, blue: 1, alpha: 0.0)
-        presenter.viewDidLoad()
+        presenter.getBanks()
         addGesture()
         
         view.addGestureRecognizer(tapGestureRecognizer)
@@ -98,6 +92,10 @@ final class ProgressSbpViewController: BaseViewController {
         presentesionView(true) {}
         
         LoggerService.shared.startLogging(publicId: presenter.configuration.publicId)
+    }
+    
+    deinit {
+        presenter.stopPolling()
     }
     
     //MARK: - Private methods
@@ -186,7 +184,6 @@ final class ProgressSbpViewController: BaseViewController {
     }
     
     private func presentesionView(_ isPresent: Bool, completion: @escaping () -> Void) {
-        
         if isCloused { return }
         isCloused = !isPresent
         let alpha = isPresent ? 0.6 : 0
@@ -221,11 +218,11 @@ extension ProgressSbpViewController: CustomSbpViewDelegate {
     }
     
     func progressSbpView(_ progressSbpView: ProgressSbpView, didSelect row: Int) {
-        presenter.removePayObserver()
+        presenter.stopPolling()
         presenter.didSelectRow(row)
     }
     
-    func progressSbpView(_ progressSbpView: ProgressSbpView, cellFor row: Int) -> SbpData {
+    func progressSbpView(_ progressSbpView: ProgressSbpView, cellFor row: Int) -> Bank {
         return presenter.filteredBanks[row]
     }
 }
@@ -250,7 +247,7 @@ extension ProgressSbpViewController: ProgressSbpViewControllerProtocol {
             
             if presenter.configuration.showResultScreen {
                 self.dismiss(animated: false) {
-                    PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .failed(nil), from: parent)
+                    PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .declined(error), from: parent)
                 }
             }
             
@@ -261,34 +258,31 @@ extension ProgressSbpViewController: ProgressSbpViewControllerProtocol {
         
         presentesionView(false) {
             self.dismiss(animated: false) {
-                PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .failed(nil),from: parent)
+                PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .declined(error),from: parent)
             }
         }
     }
     
     func openSafariViewController(_ url: URL) {
-        
         let safariViewController = SafariViewController(url: url)
+        safariViewController.delegate = self
         
-        if let viewController = UIApplication.topViewController() {
-            viewController.present(safariViewController, animated: true)
+        if let top = UIApplication.topViewController() {
+            top.present(safariViewController, animated: true)
         }
-        
     }
     
     func openBanksApp(_ url: URL) {
-        
         UIApplication.shared.open(url) { success in
             if success {
-                self.presenter.checkTransactionId()
+                self.presenter.startPolling()
             } else {
                 self.showAlert(title: nil, message: .noBankApps)
             }
         }
-        
     }
     
-    func resultPayment(result: PaymentSbpView.PaymentAction, error: String?, transactionId: Transaction?) {
+    func resultPayment(result: PaymentSbpView.PaymentAction, error: String?, transaction: PaymentTransactionResponse?) {
         
         guard let parent = self.presentingViewController else { return }
         
@@ -300,29 +294,28 @@ extension ProgressSbpViewController: ProgressSbpViewControllerProtocol {
             
             if presenter.configuration.showResultScreen {
                 self.dismiss(animated: false) {
-                    self.openResultScreens(result, error, transactionId, parent)
+                    self.openResultScreens(result, error, transaction, parent)
                 }
             }
             
-            delegate.resultPayment(result, error: error, transactionId: transactionId?.transactionId)
+            delegate.resultPayment(result, error: error, transactionId: transaction?.transactionId)
             return
         }
         
         presentesionView(false) {
             self.dismiss(animated: false) {
-                self.openResultScreens(result, error, transactionId, parent)
+                self.openResultScreens(result, error, transaction, parent)
             }
         }
     }
     
-    func openResultScreens(_ result: PaymentSbpView.PaymentAction,  _ error: String?,  _ transactionId: Transaction?, _ parent: UIViewController) {
+    func openResultScreens(_ result: PaymentSbpView.PaymentAction,  _ error: String?,  _ transaction: PaymentTransactionResponse?, _ parent: UIViewController) {
         
         switch result {
         case .success:
-            guard let transactionId = transactionId else { return }
-            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .succeeded(transactionId),from: parent)
+            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .completed(transaction), from: parent)
         case .error:
-            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .failed(nil),from: parent)
+            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .declined(error), from: parent)
         case .close:
             PaymentOptionsForm.present(with: self.presenter.configuration, from: parent)
         }
@@ -331,5 +324,14 @@ extension ProgressSbpViewController: ProgressSbpViewControllerProtocol {
     
     func tableViewReloadData() {
         contentView.reloadData()
+    }
+}
+
+//MARK: SFSafariViewControllerDelegate
+
+extension ProgressSbpViewController: SFSafariViewControllerDelegate {
+    func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        presenter.stopPolling()
+        print("Safari закрыт, polling остановлен")
     }
 }

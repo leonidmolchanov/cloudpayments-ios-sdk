@@ -9,10 +9,17 @@
 import Foundation
 
 extension String {
+    static let tPayTransactionPolling = "TPayTransactionPolling"
+    static let sberPayTransactionPolling = "SberPayTransactionPolling"
+    static let sbpTransactionPolling = "SbpTransactionPolling"
+    
     static let bundleName = "CloudpaymentsSdkResources"
     static let errorWord = "Ошибка"
+    static let errorWordTitle = "Произошла ошибка"
     static let noData = "Отсутствует соединение с сервером"
+    static let errorConfiguration = "Неверная конфигурация"
     static let errorCreatingCryptoPacket = "Ошибка при создании крипто-пакета"
+    static let errorGetPemAndVersion = "Ошибка при получении версии и ключа"
     static let informationWord = "Информация"
     static let noConnection = "Проверьте подключение к интернету"
     static let infoOutdated = "Данные могли устареть"
@@ -25,9 +32,13 @@ extension String {
     static let failedPay = "Если перейти и оплатить в приложении не удалось, попробуйте снова или выберите другой способ оплаты"
     static let paymentMethod = "Выбрать способ оплаты"
     static let anotherPaymentMethod = "Выбрать способ оплаты"
+    static let banksNotLoaded = "Банки не загружены"
+    static let schemeMissing = "Схема банка отсутствует"
+    static let couldNotOpenLink = "Не удалось открыть"
     static let closeForm = "Закрыть"
     static let banksAppNotOpen = "Не удалось открыть приложение банка, выберите другой способ оплаты"
     static let chooseBank = "Выберите банк для подтверждения оплаты"
+    static let orderAlreadyBeenPaid = "Этот заказ уже оплачен"
     
     static let RUBLE_SIGN = "\u{20BD}"
     static let EURO_SIGN = "\u{20AC}"
@@ -109,3 +120,11 @@ extension Optional where Wrapped: Collection {
         return self?.isEmpty ?? true
     }
 }
+
+extension Optional where Wrapped: Collection {
+    var hasData: Bool {
+        guard let self = self else { return false }
+        return !self.isEmpty
+    }
+}
+

@@ -27,3 +27,29 @@ final class ConfigurationRequest: BaseRequest, CloudpaymentsRequestType {
         return CloudpaymentsRequest(path: fullPath, headers: headers)
     }
 }
+
+final class IntentPatchById: BaseRequest, CloudpaymentsRequestType {
+    typealias ResponseType = PaymentIntentResponse
+
+    private let intentId: String
+
+    init(patchBody: Data, intentId: String, apiUrl: String, headers: [String: String]) {
+        self.intentId = intentId
+        super.init(
+            queryItems: [:],
+            headers: headers,
+            apiUrl: apiUrl,
+            body: patchBody
+        )
+    }
+
+    var data: CloudpaymentsRequest {
+        let fullUrl = "\(apiUrl)api/intent/\(intentId)"
+        return CloudpaymentsRequest(
+            path: fullUrl,
+            method: .patch,
+            headers: headers,
+            body: body
+        )
+    }
+}

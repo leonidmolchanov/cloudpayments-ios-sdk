@@ -8,7 +8,7 @@
 
 import UIKit
 
-final class ProgressSberPayViewController: BaseViewController {
+final class ProgressSberPayViewController: UIViewController {
     weak var delegate: ProgressSberPayProtocol?
     private let customView = ProgressSberPayView()
     private let presenter: ProgressSberPayPresenter
@@ -51,9 +51,12 @@ final class ProgressSberPayViewController: BaseViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         customView.delegate = self
-        presenter.getLink()
-        
-        LoggerService.shared.startLogging(publicId: presenter.configuration.publicId)
+        presenter.getSberPayLinkIntentApi()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        presenter.stopPolling()
     }
 }
 
@@ -63,7 +66,7 @@ extension ProgressSberPayViewController: CustomSberPayViewDelegate {
     func closePaymentButton() {
         
         if defaultOpen {
-            resultPayment(result: .close, error: nil, transactionId: nil)
+            resultPayment(result: .close, error: nil, transaction: nil)
             return
         }
         
@@ -77,87 +80,35 @@ extension ProgressSberPayViewController: CustomSberPayViewDelegate {
 
 extension ProgressSberPayViewController: ProgressSberPayViewControllerProtocol {
     
-    var isTest: Bool? {
-        presenter.configuration.paymentData.isTest
+    func showAlert(message: String?, title: String?) {
+        showAlert(title: title, message: message)
     }
     
-    func openLinkURL(url path: URL) {
-        
-        if isTest ?? false {
-            UIApplication.shared.open(path, options: [:]) { success in
-                if !success {
-                    print("Failed to open test URL")
-                    self.showAlert(title: nil, message: .banksAppNotOpen)
-                }
-            }
-            return
-        }
-        
-        let sberDeeplinks = [
-            "ios-app-smartonline",
-            "btripsexpenses",
-            "budgetonline-ios",
-            "app-online-ios"
-        ]
-        
-        let urlString = path.absoluteString
-        guard let urlComponents = URLComponents(string: urlString) else {
-            showAlert(title: nil, message: .banksAppNotOpen)
-            return
-        }
-        
-        var foundValidLink = false
-        
+    func openLinkUrls(urls: [URL]) {
         let dispatchGroup = DispatchGroup()
+        var successFound = false
         
-        for scheme in sberDeeplinks {
-            var sberComponents = urlComponents
-            sberComponents.scheme = scheme
-            
-            if scheme == "ios-app-smartonline" || scheme == "btripsexpenses" || scheme == "budgetonline-ios" || scheme == "app-online-ios" {
-                let originalHost = sberComponents.host ?? ""
-                let originalPath = sberComponents.path
-                sberComponents.host = "sbolpay"
-                sberComponents.path = "/" + originalHost + originalPath
-            }
-            
-            guard let generatedLink = sberComponents.url else { continue }
-            
+        for url in urls {
             dispatchGroup.enter()
-            UIApplication.shared.open(generatedLink, options: [:]) { success in
+            UIApplication.shared.open(url, options: [:]) { success in
                 if success {
-                    foundValidLink = true
-                } else {
-                    print("Failed to open URL: \(generatedLink.absoluteString)")
+                    successFound = true
                 }
                 dispatchGroup.leave()
             }
-            
-            if foundValidLink {
+            if successFound {
                 break
             }
         }
         
-        if !foundValidLink {
-            dispatchGroup.enter()
-            UIApplication.shared.open(path, options: [:]) { success in
-                if success {
-                    foundValidLink = true
-                } else {
-                    print("Failed to open URL original URL")
-                }
-                dispatchGroup.leave()
-            }
-        }
-        
         dispatchGroup.notify(queue: .main) {
-            if !foundValidLink {
+            if !successFound {
                 self.showAlert(title: nil, message: .banksAppNotOpen)
             }
         }
     }
     
-    func resultPayment(result: PaymentSberPayView.PaymentAction, error: String?, transactionId: Transaction?) {
+    func resultPayment(result: PaymentSberPayView.PaymentAction, error: String?, transaction: PaymentTransactionResponse?) {
         
         guard let parent = self.presentingViewController else { return }
         
@@ -165,26 +116,26 @@ extension ProgressSberPayViewController: ProgressSberPayViewControllerProtocol {
             
             if presenter.configuration.showResultScreen {
                 self.dismiss(animated: false) {
-                    self.openResultScreens(result, error, transactionId, parent)
+                    self.openResultScreens(result, error, transaction, parent)
                 }
             }
             
-            delegate.resultPayment(result: result, error: error, transactionId: transactionId?.transactionId)
+            delegate.resultPayment(result: result, error: error, transactionId: transaction?.transactionId)
             return
         }
         
         self.dismiss(animated: false) {
-            self.openResultScreens(result, error, transactionId, parent)
+            self.openResultScreens(result, error, transaction, parent)
         }
     }
     
-    func openResultScreens(_ result: PaymentSberPayView.PaymentAction,  _ error: String?, _ transactionId: Transaction?, _ parent: UIViewController) {
+    func openResultScreens(_ result: PaymentSberPayView.PaymentAction,  _ error: String?, _ transaction: PaymentTransactionResponse?, _ parent: UIViewController) {
         
         switch result {
         case .success:
-            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .succeeded(transactionId), from: parent)
+            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .completed(transaction), from: parent)
         case .error:
-            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .failed(error), from: parent)
+            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .declined(error), from: parent)
         case .close:
             PaymentOptionsForm.present(with: self.presenter.configuration, from: parent)
         }

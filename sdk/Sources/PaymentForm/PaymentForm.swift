@@ -10,7 +10,7 @@ import UIKit
 import PassKit
 import WebKit
 
-typealias PaymentCallback = (_ status: Bool, _ canceled: Bool, _ trasaction: Transaction?, _ errorMessage: String?) -> ()
+typealias PaymentCallbackIntentApi = (_ status: Bool, _ canceled: Bool, _ transaction: PaymentIntentResponse?, _ errorMessage: String?) -> ()
 
 public class PaymentForm: BaseViewController {
     
@@ -28,28 +28,26 @@ public class PaymentForm: BaseViewController {
     lazy var customTransitionDelegateInstance = FormTransitioningDelegate(viewController: self)
     
     // MARK: - Private Properties
-    private lazy var threeDsProcessor: ThreeDsProcessor = ThreeDsProcessor.init()
+    private lazy var threeDsProcessor: ThreeDsProcessor = ThreeDsProcessor()
     private var threeDsCallbackId: String = ""
     
-    private var threeDsCompletion: PaymentCallback?
-    private var transaction: Transaction?
+    private var threeDsCompletionIntentApi: PaymentCallbackIntentApi?
+    private var paymentResponse: PaymentIntentResponse?
     
     // MARK: - Public Methods
     
     @discardableResult
     public class func present(with configuration: PaymentConfiguration, from: UIViewController) -> PaymentForm? {
-        PublicKeyResponse.apiURL = configuration.apiUrl
-        
         let completion = {
             configuration.paymentUIDelegate.paymentFormDidDisplay()
         }
         configuration.paymentUIDelegate.paymentFormWillDisplay()
-
+        
         if PKPaymentAuthorizationViewController.canMakePayments() {
             let controller = PaymentOptionsForm.present(with: configuration, from: from, completion: completion) as! PaymentOptionsForm
             controller.onCardOptionSelected = { saveCard in
                 
-                 configuration.paymentData.saveCard = saveCard
+                configuration.paymentData.saveCard = saveCard
                 
                 self.showCardForm(with: configuration, from: from, completion: nil)
             }
@@ -121,62 +119,60 @@ public class PaymentForm: BaseViewController {
         self.containerView.layer.mask = mask
     }
     
-    // MARK: - One stage payment
-    internal func charge(cardCryptogramPacket: String, email: String?, completion: PaymentCallback?) {
-        network.charge(cardCryptogramPacket: cardCryptogramPacket,
-                       email: email,
-                       paymentData: self.configuration.paymentData) { [weak self] response, error in
-            if let response = response {
-                self?.checkTransactionResponse(transactionResponse: response, completion: completion)
-            } else if let error = error {
-                completion?(false, false, nil, error.localizedDescription)
-            }
-        }
-    }
-    // MARK: - Two stage payment
-    internal func auth(cardCryptogramPacket: String, email: String?, completion: PaymentCallback?) {
-        network.auth(cardCryptogramPacket: cardCryptogramPacket,
-                     email: email,
-                     paymentData: self.configuration.paymentData) { [weak self] response, error in
-            if let response = response {
-                self?.checkTransactionResponse(transactionResponse: response, completion: completion)
-            } else if let error = error {
-                completion?(false, false, nil, error.localizedDescription)
-            }
-        }
-    }
-    
-    // Проверяем необходимо ли подтверждение с использованием 3DS
-    internal func checkTransactionResponse(transactionResponse: TransactionResponse, completion: PaymentCallback?) {
-        self.threeDsCompletion = nil
-        self.transaction = nil
-        
-        if (transactionResponse.success == true) {
-            completion?(true, false, transactionResponse.model, nil)
-        } else {
-            let message = transactionResponse.message ?? ""
-            if (!message.isEmpty) {
-                completion?(false, false, transactionResponse.model, transactionResponse.message)
-            } else if let paReq = transactionResponse.model?.paReq, !paReq.isEmpty, let acsUrl = transactionResponse.model?.acsUrl, !acsUrl.isEmpty {
-                self.threeDsCallbackId = transactionResponse.model?.threeDsCallbackId ?? ""
-                
-                let transactionId = String(transactionResponse.model?.transactionId ?? 0)
-                
-//                Показываем 3DS форму
-                
-                let threeDsData = ThreeDsData.init(transactionId: transactionId, paReq: paReq, acsUrl: acsUrl)
-                threeDsProcessor.make3DSPayment(with: threeDsData, delegate: self)
-                
-                self.threeDsCompletion = completion
-                self.transaction = transactionResponse.model
+    internal func chargeIntentApi(cardCryptogramPacket: String, email: String?, completion: PaymentCallbackIntentApi?) {
+        network.createIntentApiPay(cardCryptogram: cardCryptogramPacket, with: configuration) { statusCode, result in
+            if let statusCode = statusCode, let result = result {
+                if statusCode == 202 {
+                    self.show3ds(transactionResponse: result, completion: completion, statusCode: statusCode)
+                } else if statusCode == 200 {
+                    print("Non 3DS — статус: \(String(describing: result.transaction?.status))")
+                    completion?(true, false, result, nil)
+                } else {
+                    completion?(false, false, nil, result.transaction?.code)
+                }
             } else {
-                completion?(false, false, transactionResponse.model, transactionResponse.model?.cardHolderMessage)
+                completion?(false, false, nil, result?.transaction?.code)
             }
         }
     }
     
-    internal func post3ds(transactionId: String, paRes: String, completion: @escaping ((_ response: ThreeDsResponse) -> ())) {
-        network.post3ds(transactionId: transactionId, threeDsCallbackId: self.threeDsCallbackId, paRes: paRes, completion: completion)
+    internal func authIntentApi(cardCryptogramPacket: String, email: String?, completion: PaymentCallbackIntentApi?) {
+        network.createIntentApiPay(cardCryptogram: cardCryptogramPacket, with: configuration) { statusCode, result in
+            if let statusCode = statusCode, let result = result {
+                if statusCode == 202 {
+                    self.show3ds(transactionResponse: result, completion: completion, statusCode: statusCode)
+                } else if statusCode == 200 {
+                    print("Non 3DS — статус: \(String(describing: result.transaction?.status))")
+                    completion?(true, false, result, nil)
+                } else {
+                    completion?(false, false, nil, result.transaction?.code)
+                }
+            } else {
+                completion?(false, false, nil, result?.transaction?.code)
+            }
+        }
+    }
+    
+    internal func show3ds(transactionResponse: PaymentIntentResponse, completion: PaymentCallbackIntentApi?, statusCode: Int) {
+        self.threeDsCompletionIntentApi = nil
+        
+        if statusCode == 202 {
+            print("Status is \(String(describing: transactionResponse.transaction?.status))")
+            
+            guard let threeDsCallbackId = transactionResponse.threeDsCallbackId else { return }
+            self.threeDsCallbackId = threeDsCallbackId
+            guard let paReq = transactionResponse.paReq else { return }
+            guard let transactionId = transactionResponse.transaction?.transactionId else { return }
+            guard let acsUrl = transactionResponse.acsUrl else { return }
+            guard let intentId = configuration.paymentData.intentId else { return }
+            
+            let threeDsData = ThreeDsData(transactionId: String(transactionId), paReq: paReq, acsUrl: acsUrl, threeDSCallbackId: threeDsCallbackId)
+            threeDsProcessor.make3DSPayment(with: threeDsData, delegate: self, intentId: intentId)
+            self.threeDsCompletionIntentApi = completion
+            self.paymentResponse = transactionResponse
+        } else {
+            completion?(false, false, transactionResponse, transactionResponse.transaction?.paymentMethod)
+        }
     }
     
     // MARK: - Private methods closeThreeds and configureThreeDsCloseButton
@@ -189,7 +185,7 @@ public class PaymentForm: BaseViewController {
                 if let container = self?.threeDsContainerView {
                     container.subviews.forEach { $0.removeFromSuperview()}
                 }
-
+                
                 completion?()
             }
         } else {
@@ -199,38 +195,31 @@ public class PaymentForm: BaseViewController {
     
     private func configureThreeDsCloseButton() {
         self.threeDsCloseButton?.onAction = { [weak self] in
-            self?.threeDsCompletion?(false, true, nil, nil)
+            self?.threeDsCompletionIntentApi?(false, true, nil, nil)
             self?.closeThreeDs { [weak self] in
-                self?.threeDsCompletion?(false, true, nil, nil)
+                self?.threeDsCompletionIntentApi?(false, true, nil, nil)
             }
         }
     }
-    
-    
 }
 // MARK: - Extensions
 extension PaymentForm: ThreeDsDelegate {
-    public func onAuthorizationCompleted(with md: String, paRes: String) {
+    public func onAuthorizationCompleted(with transactionStatus: Bool?) {
         self.closeThreeDs { [weak self] in
-            guard let self = self else {
+            guard let self = self, let transactionStatus = transactionStatus else {
                 return
             }
-            self.post3ds(transactionId: md, paRes: paRes) { [weak self] response in
-                guard let self = self else {
-                    return
-                }
-                
-                self.transaction?.reasonCode = Int(response.reasonCode!) ?? 5204
-                
-                self.threeDsCompletion?(response.success, false, self.transaction, response.reasonCode!)
-            }
+            self.threeDsCompletionIntentApi?(transactionStatus, false, paymentResponse, nil)
         }
     }
-
-    public func onAuthorizationFailed(with html: String) {
-        self.threeDsCompletion?(false, false, nil, html)
+    
+    public func onAuthorizationFailed(with code: String) {
+        self.closeThreeDs { [weak self] in
+            guard let self = self else { return }
+            self.threeDsCompletionIntentApi?(false, false, paymentResponse, code)
+        }
     }
-
+    
     public func willPresentWebView(_ webView: WKWebView) {
         if let container = self.threeDsContainerView {
             container.addSubview(webView)
@@ -250,20 +239,20 @@ extension PaymentForm: ThreeDsDelegate {
 // MARK: - UIViewControllerTransitioningDelegate
 class FormTransitioningDelegate: NSObject, UIViewControllerTransitioningDelegate {
     weak var formController: PaymentForm!
-
+    
     init(viewController: PaymentForm) {
         self.formController = viewController
         super.init()
     }
-
+    
     func presentationController(forPresented presented: UIViewController, presenting: UIViewController?, source: UIViewController) -> UIPresentationController? {
         return FormPresentationController(presentedViewController: presented, presenting: presenting)
     }
-
+    
     func animationController(forPresented presented: UIViewController, presenting: UIViewController, source: UIViewController) -> UIViewControllerAnimatedTransitioning? {
         return nil
     }
-
+    
     func animationController(forDismissed dismissed: UIViewController) -> UIViewControllerAnimatedTransitioning? {
         return nil
     }

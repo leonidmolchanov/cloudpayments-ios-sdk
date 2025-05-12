@@ -92,7 +92,8 @@ let paymentData = PaymentData()
     .setInvoiceId("123") // Номер счета или заказа
     .setEmail("test@cp.ru") // E-mail плательщика, на который будет отправлена квитанция об оплате
     .setPayer(payer) // Информация о плательщике
-    .setJsonData(jsonData) // Любые другие данные, которые будут связаны с транзакцией  
+    .setJsonData(jsonData) // Любые другие данные, которые будут связаны с транзакцией
+    .setCultureName("RU-ru") // Данные по региону 
     .setReceipt(receipt) // Данные для чека
     .setRecurrent(recurrent) // Данные для подписки           
 ```
@@ -108,7 +109,7 @@ let configuration = PaymentConfiguration.init(
     scanner: nil, // Сканер банковских карт
     requireEmail: true, // Обязательный email, (по умолчанию false)
     useDualMessagePayment: true, // Использовать двухстадийную схему проведения платежа, (по умолчанию используется одностадийная схема)
-    disableApplePay: false, // Выключить Apple Pay, (по умолчанию Apple Pay включен)
+    disableApplePay: true, // Выключить Apple Pay, (по умолчанию Apple Pay включен)
     successRedirectUrl: "", // Ваш deeplink для редиректа из приложения банка после успешной оплаты, (если ничего не передано, по умолчанию используется URL адрес вашего сайта)
     failRedirectUrl: "" //  Ваш deeplink для редиректа из приложения банка после неуспешной оплаты, (если ничего не передано, по умолчанию используется URL адрес вашего сайта)
 ```
@@ -587,6 +588,9 @@ public protocol ThreeDsDelegate: class {
 
 ### История обновлений:
 
+#### 1.6.0
+* Выполнен переход на новое API (только для стандартной формы)
+
 #### 1.5.18
 * Обновлены схемы для SberPay, исправлена передача параметров startDate и vat
 
@@ -637,7 +641,6 @@ public protocol ThreeDsDelegate: class {
 * Добавлена расшифрока некоторых причин отказа в проведении платежа
 
 * Повышена надежность
-
 
 #### 1.5.2
 * Улучшена валидация

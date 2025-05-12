@@ -11,6 +11,7 @@ import Foundation
 public protocol PaymentDelegate: AnyObject {
     func onPaymentFinished(_ transactionId: Int64?)
     func onPaymentFailed(_ errorMessage: String?)
+    func paymentFinishedIntentApi(_ transaction: Int64?)
 }
 
 public protocol PaymentUIDelegate: AnyObject {
@@ -28,6 +29,10 @@ internal class PaymentDelegateImpl {
     }
     
     func paymentFinished(_ transaction: Transaction?){
+        self.delegate?.onPaymentFinished(transaction?.transactionId)
+    }
+    
+    func paymentFinishedIntentApi(_ transaction: PaymentTransactionResponse?){
         self.delegate?.onPaymentFinished(transaction?.transactionId)
     }
     

@@ -8,7 +8,7 @@
 
 import UIKit
 
-final class ProgressTPayViewController: BaseViewController {
+final class ProgressTPayViewController: UIViewController {
     
     weak var delegate: ProgressTPayProtocol?
     private let customView = ProgressTPayView()
@@ -52,9 +52,12 @@ final class ProgressTPayViewController: BaseViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         customView.delegate = self
-        presenter.getLink()
-        
-        LoggerService.shared.startLogging(publicId: presenter.configuration.publicId)
+        presenter.getTPayLinkIntentApi()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        presenter.stopPolling()
     }
 }
 
@@ -65,7 +68,7 @@ extension ProgressTPayViewController: CustomTPayViewDelegate {
     func closePaymentButton() {
         
         if defaultOpen {
-            resultPayment(result: .close, error: nil, transactionId: nil)
+            resultPayment(result: .close, error: nil, transaction: nil)
             return
         }
         
@@ -79,6 +82,10 @@ extension ProgressTPayViewController: CustomTPayViewDelegate {
 
 extension ProgressTPayViewController: ProgressTPayViewControllerProtocol {
     
+    func showAlert(message: String?, title: String?) {
+        showAlert(title: title, message: message)
+    }
+    
     func openLinkURL(url: URL) {
         UIApplication.shared.open(url) { success in
             if !success {
@@ -87,7 +94,7 @@ extension ProgressTPayViewController: ProgressTPayViewControllerProtocol {
         }
     }
     
-    func resultPayment(result: PaymentTPayView.PaymentAction, error: String?, transactionId: Transaction?) {
+    func resultPayment(result: PaymentTPayView.PaymentAction, error: String?, transaction: PaymentTransactionResponse?) {
         
         guard let parent = self.presentingViewController else { return }
         
@@ -95,26 +102,26 @@ extension ProgressTPayViewController: ProgressTPayViewControllerProtocol {
             
             if presenter.configuration.showResultScreen {
                 self.dismiss(animated: false) {
-                    self.openResultScreens(result, error, transactionId, parent)
+                    self.openResultScreens(result, error, transaction, parent)
                 }
             }
             
-            delegate.resultPayment(result: result, error: error, transactionId: transactionId?.transactionId)
+            delegate.resultPayment(result: result, error: error, transactionId: transaction?.transactionId)
             return
         }
         
         self.dismiss(animated: false) {
-            self.openResultScreens(result, error, transactionId, parent)
+            self.openResultScreens(result, error, transaction, parent)
         }
     }
     
-    func openResultScreens(_ result: PaymentTPayView.PaymentAction,  _ error: String?, _ transactionId: Transaction?, _ parent: UIViewController) {
+    func openResultScreens(_ result: PaymentTPayView.PaymentAction,  _ error: String?, _ transactionId: PaymentTransactionResponse?, _ parent: UIViewController) {
         
         switch result {
         case .success:
-            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .succeeded(transactionId), from: parent)
+            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .completed(transactionId), from: parent)
         case .error:
-            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .failed(error), from: parent)
+            PaymentProcessForm.present(with: self.presenter.configuration, cryptogram: nil, email: nil, state: .declined(error), from: parent)
         case .close:
             PaymentOptionsForm.present(with: self.presenter.configuration, from: parent)
         }

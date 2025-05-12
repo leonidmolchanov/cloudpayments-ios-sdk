@@ -10,6 +10,10 @@ import Foundation
 
 enum ObserverKeys: String {
     case generalObserver = "GeneralObserver"
+    case intentWaitStatusObserver = "IntentWaitStatusObserver"
+    case intentTpayObserver = "IntentTpayObserver"
+    case intentSberPayObserver = "IntentSberPayObserver"
+    case intentSbpObserver = "IntentSbpObserver"
 
     var key: NSNotification.Name {
         return NSNotification.Name(rawValue: rawValue)

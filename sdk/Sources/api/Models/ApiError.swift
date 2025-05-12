@@ -106,3 +106,15 @@ public class ApiError {
 }
 
 
+extension ApiError {
+    public static func getFullErrorDescriptionIntentApi(from code: String?) -> String {
+        guard let code = code else { return "Операция не может быть обработана" }
+
+        let trimmedCode = code.hasPrefix("R") ? String(code.dropFirst()) : code
+
+        let base = getErrorDescription(code: trimmedCode)
+        let extra = getErrorDescriptionExtra(code: trimmedCode)
+
+        return [base, extra].joined(separator: base.isEmpty || extra.isEmpty ? "" : "#")
+    }
+}

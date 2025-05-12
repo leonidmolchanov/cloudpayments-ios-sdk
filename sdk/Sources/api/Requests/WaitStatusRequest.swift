@@ -9,21 +9,33 @@
 import Foundation
 import CloudpaymentsNetworking
 
-final class WaitStatusRequest: BaseRequest, CloudpaymentsRequestType {
-    typealias ResponseType = TransactionStatusResponse
+final class IntentStatusWait: BaseRequest, CloudpaymentsRequestType {
+    typealias ResponseType = PaymentTransactionStatusModel
+    
+    private let intentId: String
+
+    init(intentId: String, apiUrl: String) {
+        self.intentId = intentId
+        super.init(apiUrl: apiUrl)
+    }
+
     var data: CloudpaymentsRequest {
-        let path = CloudpaymentsHTTPResource.waitStatus.asUrl(apiUrl: apiUrl)
-       
-        guard var component = URLComponents(string: path) else { return CloudpaymentsRequest(path: path, method: .post, params: params, headers: headers) }
-       
+        let path = "\(apiUrl)api/intent/\(intentId)/status"
+
+        guard var component = URLComponents(string: path) else {
+            return CloudpaymentsRequest(path: path, method: .get, params: params, headers: headers)
+        }
+
         if !queryItems.isEmpty {
-            let items = queryItems.compactMap { return URLQueryItem(name: $0, value: $1) }
+            let items = queryItems.map { URLQueryItem(name: $0.key, value: $0.value) }
             component.queryItems = items
         }
-        
-        guard let url = component.url else { return CloudpaymentsRequest(path: path, method: .post, params: params, headers: headers) }
-        let fullPath = url.absoluteString
-        
-        return CloudpaymentsRequest(path: fullPath, method: .post, params: params, headers: headers)
+
+        guard let url = component.url else {
+            return CloudpaymentsRequest(path: path, method: .get, params: params, headers: headers)
+        }
+
+        return CloudpaymentsRequest(path: url.absoluteString, method: .get, params: params, headers: headers)
     }
 }
+

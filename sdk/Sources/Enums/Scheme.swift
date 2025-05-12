@@ -12,3 +12,8 @@ enum Scheme: String, Codable {
     case charge = "charge"
     case auth = "auth"
 }
+
+enum IntentScheme: String, Codable {
+    case single = "single"
+    case dual = "dual"
+}

@@ -14,16 +14,16 @@ public final class PaymentProcessForm: PaymentForm {
     public enum State {
         
         case inProgress
-        case succeeded(Transaction?)
-        case failed(String?)
+        case completed(PaymentTransactionResponse?)
+        case declined(String?)
         
         func getImage() -> UIImage? {
             switch self {
             case .inProgress:
                 return .iconProgress
-            case .succeeded:
+            case .completed:
                 return .iconSuccess
-            case .failed:
+            case .declined:
                 return .iconFailed
             }
         }
@@ -32,18 +32,18 @@ public final class PaymentProcessForm: PaymentForm {
             switch self {
             case .inProgress:
                 return "Оплата в процессе"
-            case .succeeded:
+            case .completed:
                 return "Оплата прошла успешно"
-            case .failed(let message):
+            case .declined(let message):
                 return message ?? "Операция отклонена"
             }
         }
         
         func getActionButtonTitle() -> String? {
             switch self {
-            case .succeeded:
+            case .completed:
                 return "Отлично!"
-            case .failed:
+            case .declined:
                 return "Повторить оплату"
             default:
                 return nil
@@ -63,7 +63,7 @@ public final class PaymentProcessForm: PaymentForm {
     @IBOutlet private weak var progressStackView: UIStackView!
     
     @IBOutlet private weak var selectPaymentButton: Button!
-
+    
     private var state: State = .inProgress
     private var cryptogram: String?
     private var email: String?
@@ -71,7 +71,7 @@ public final class PaymentProcessForm: PaymentForm {
     @discardableResult
     public class func present(with configuration: PaymentConfiguration, cryptogram: String?, email: String?, state: State = .inProgress, from: UIViewController, completion: (() -> ())? = nil) -> PaymentForm? {
         let storyboard = UIStoryboard.init(name: "PaymentForm", bundle: Bundle.mainSdk)
-
+        
         let controller = storyboard.instantiateViewController(withIdentifier: "PaymentProcessForm") as! PaymentProcessForm        
         controller.configuration = configuration
         controller.cryptogram = cryptogram
@@ -89,15 +89,17 @@ public final class PaymentProcessForm: PaymentForm {
         
         if let cryptogram = self.cryptogram {
             if (configuration.useDualMessagePayment) {
-                self.auth(cardCryptogramPacket: cryptogram, email: self.email) { [weak self] status, canceled, transaction, errorMessage in
+                self.authIntentApi(cardCryptogramPacket: cryptogram, email: self.email) { [weak self] status, canceled, transaction, errorMessage in
                     guard let self = self else {
                         return
                     }
                     if status {
-                        self.updateUI(with: .succeeded(transaction))
+                        self.updateUI(with: .completed(transaction?.transaction))
                     } else if !canceled {
-                        let apiErrorDescription = ApiError.getFullErrorDescription(code: String(transaction?.reasonCode ?? 5204))
-                        self.updateUI(with: .failed(apiErrorDescription))
+                        if let errorCode = errorMessage {
+                            let apiErrorDescription = ApiError.getFullErrorDescriptionIntentApi(from: errorCode)
+                            self.updateUI(with: .declined(apiErrorDescription))
+                        }
                     } else {
                         self.configuration.paymentUIDelegate.paymentFormWillHide()
                         self.dismiss(animated: true) { [weak self] in
@@ -109,15 +111,17 @@ public final class PaymentProcessForm: PaymentForm {
                     }
                 }
             } else {
-                self.charge(cardCryptogramPacket: cryptogram, email: self.email) { [weak self] status, canceled, transaction, errorMessage in
+                self.chargeIntentApi(cardCryptogramPacket: cryptogram, email: email) { [weak self] status, canceled, transaction, errorMessage in
                     guard let self = self else {
                         return
                     }
                     if status {
-                        self.updateUI(with: .succeeded(transaction))
+                        self.updateUI(with: .completed(transaction?.transaction))
                     } else if !canceled {
-                        let apiErrorDescription = ApiError.getFullErrorDescription(code: String(transaction?.reasonCode ?? 5204))
-                        self.updateUI(with: .failed(apiErrorDescription))
+                        if let errorCode = errorMessage {
+                            let apiErrorDescription = ApiError.getFullErrorDescriptionIntentApi(from: errorCode)
+                            self.updateUI(with: .declined(apiErrorDescription))
+                        }
                     } else {
                         self.configuration.paymentUIDelegate.paymentFormWillHide()
                         self.dismiss(animated: true) { [weak self] in
@@ -148,17 +152,17 @@ public final class PaymentProcessForm: PaymentForm {
     private func updateUI(with state: State){
         self.state = state
         self.stopAnimation()
-    
+        
         switch state {
         case .inProgress:
             buttonView.isHidden = true
             errorView.isHidden = true
             selectPaymentButton.superview?.isHidden = true
-        case .succeeded(_):
+        case .completed(_):
             selectPaymentButton.superview?.isHidden = true
             buttonView.isHidden = false
             errorView.isHidden = true
-        case .failed(_):
+        case .declined(_):
             selectPaymentButton.superview?.isHidden = true
             buttonView.isHidden = false
         }
@@ -177,19 +181,19 @@ public final class PaymentProcessForm: PaymentForm {
         self.progressIcon.image = self.state.getImage()
         self.actionButton.setTitle(self.state.getActionButtonTitle(), for: .normal)
         
-        if case .succeeded(let transaction) = self.state {
+        if case .completed(let transaction) = self.state {
             
-            self.configuration.paymentDelegate.paymentFinished(transaction)
+            self.configuration.paymentDelegate.paymentFinishedIntentApi(transaction)
             self.actionButton.onAction = { [weak self] in
                 self?.hide()
             }
-        } else if case .failed(let errorMessage) = self.state {
+        } else if case .declined(let errorMessage) = self.state {
             self.configuration.paymentDelegate.paymentFailed(errorMessage)
             self.actionButton.onAction = { [weak self] in
                 guard let self = self else {
                     return
                 }
-               
+                
                 if configuration.showResultScreen {
                     self.dismiss(animated: true)
                     return

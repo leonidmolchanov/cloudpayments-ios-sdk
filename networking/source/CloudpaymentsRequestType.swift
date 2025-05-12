@@ -46,5 +46,36 @@ public extension CloudpaymentsRequestType {
             }, onRedirect: onRedirect
         )
     }
+    
+    func executeWithStatusCode(dispatcher: CloudpaymentsNetworkDispatcher = CloudpaymentsURLSessionNetworkDispatcher.instance,
+                               keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .useDefaultKeys,
+                               onSuccess: @escaping (Int, ResponseType) -> Void,
+                               onError: @escaping (Int, Error) -> Void,
+                               onRedirect: ((URLRequest) -> Bool)? = nil) {
+        dispatcher.dispatchWithStatusCode(
+            request: self.data,
+            onSuccess: { (statusCode: Int, responseData: Data) in
+                do {
+                    let jsonDecoder = JSONDecoder()
+                    jsonDecoder.keyDecodingStrategy = keyDecodingStrategy
+                    let result = try jsonDecoder.decode(ResponseType.self, from: responseData)
+                    DispatchQueue.main.async {
+                        onSuccess(statusCode, result) 
+                    }
+                } catch let error {
+                    let parseError: Error = (error is DecodingError) ? CloudpaymentsError.parseError : error
+                    DispatchQueue.main.async {
+                        onError(statusCode, parseError)
+                    }
+                }
+            },
+            onError: { error, statusCode in
+                DispatchQueue.main.async {
+                    onError(statusCode, error)
+                }
+            },
+            onRedirect: onRedirect
+        )
+    }
 }
 

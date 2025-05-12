@@ -21,6 +21,7 @@ public struct ButtonConfiguration {
     }
 }
 
+
 public class CloudpaymentsApi {
     enum Source: String {
         case cpForm = "Cloudpayments SDK iOS (Default form)"
@@ -28,6 +29,7 @@ public class CloudpaymentsApi {
     }
     
     public static let baseURLString = "https://api.cloudpayments.ru/"
+    public static let baseIntentURLString = "https://intent-api.cloudpayments.ru/"
     
     private let defaultCardHolderName = "Cloudpayments SDK"
     
@@ -37,7 +39,7 @@ public class CloudpaymentsApi {
     private let publicId: String
     private let apiUrl: String
     private let source: Source
-        
+    
     public required convenience init(publicId: String, apiUrl: String = baseURLString) {
         self.init(publicId: publicId, apiUrl: apiUrl, source: .ownForm)
     }
@@ -54,7 +56,7 @@ public class CloudpaymentsApi {
         self.source = source
     }
     
-    public class func getBankInfo(cardNumber: String, 
+    public class func getBankInfo(cardNumber: String,
                                   completion: ((_ bankInfo: BankInfo?, _ error: CloudpaymentsError?) -> ())?) {
         let cleanCardNumber = Card.cleanCreditCardNo(cardNumber)
         guard cleanCardNumber.count >= 6 else {
@@ -76,12 +78,15 @@ public class CloudpaymentsApi {
         })
     }
     
-    public class func getBinInfo(cleanCardNumber: String, 
-                                 with configuration: PaymentConfiguration,
-                                 completion: @escaping (BankInfo?, Bool?) -> Void) {
-      
-        var sevenNumberHash: String? = nil
-        var eightNumberHash: String? = nil
+   public class func getBinInfoWithIntentId(cleanCardNumber: String,
+                                             with configuration: PaymentConfiguration,
+                                             completion: @escaping (BankInfo?, Bool?) -> Void) {
+        
+        guard let intentId = configuration.paymentData.intentId else {
+            completion(nil, false)
+            return
+        }
+        
         var firstSixDigits: String? = nil
         
         if cleanCardNumber.count >= 6 {
@@ -89,105 +94,23 @@ public class CloudpaymentsApi {
             firstSixDigits = String(cleanCardNumber[..<firstSixIndex])
         }
         
-        if cleanCardNumber.count >= 7 {
-            let firstSevenIndex = cleanCardNumber.index(cleanCardNumber.startIndex, offsetBy: 7)
-            let firstSevenDigits = String(cleanCardNumber[..<firstSevenIndex])
-            
-            sevenNumberHash = RSAUtils.sha512HashString(input: firstSevenDigits)
-        }
-        
-        if cleanCardNumber.count >= 8 {
-            let firstEightIndex = cleanCardNumber.index(cleanCardNumber.startIndex, offsetBy: 8)
-            let firstEightDigits = String(cleanCardNumber[..<firstEightIndex])
-            
-            eightNumberHash = RSAUtils.sha512HashString(input: firstEightDigits)
-        }
-    
-        var queryItems = [
+        let queryItems = [
+            "PaymentMethod": "Card",
             "Bin": firstSixDigits,
-            "Currency": configuration.paymentData.currency,
-            "Amount": configuration.paymentData.amount,
         ] as [String: String?]
         
-        if let isQiwi = configuration.paymentData.isQiwi {
-            queryItems["isQiwi"] = String(isQiwi)
-        }
+        let request = BinInfoRequestWithIntentId(intentId: intentId, queryItems: queryItems, apiUrl: baseIntentURLString)
         
-        if let isAllowedNotSanctionedCards = configuration.paymentData.isAllowedNotSanctionedCards {
-            queryItems["isAllowedNotSanctionedCards"] = String(isAllowedNotSanctionedCards)
-        }
-
-        if let sevenNumberHash = sevenNumberHash {
-            queryItems["SevenNumberHash"] = sevenNumberHash
-        }
-        
-        if let eightNumberHash = eightNumberHash {
-            queryItems["EightNumberHash"] = eightNumberHash
-        }
-        
-        let request = BinInfoRequest(queryItems: queryItems, apiUrl: configuration.apiUrl)
-
         request.execute { result in
-            completion(result.model, result.success)
+            completion(result, true)
             
             LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
             
         } onError: { error in
             print(error)
+            completion(nil, false)
             
             LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
-            
-            completion(nil, false)
-        }
-    }
-    
-    public func charge(cardCryptogramPacket: String,
-                       email: String?,
-                       paymentData: PaymentData,
-                       completion: @escaping CloudpaymentsRequestCompletion<TransactionResponse>) {
-        let parameters = generateParams(cardCryptogramPacket: cardCryptogramPacket,
-                                        email: email,
-                                        paymentData: paymentData)
-        ChargeRequest(params: patch(params: parameters), headers: getDefaultHeaders(), apiUrl: apiUrl).execute(keyDecodingStrategy: .convertToUpperCamelCase, onSuccess: { response in
-            completion(response, nil)
-            
-            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/charge", success: true)
-            
-            
-        }, onError: { error in
-            
-            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/charge", success: false)
-            
-            completion(nil, error)
-        })
-    }
-    
-    public func auth(cardCryptogramPacket: String,
-                     email: String?,
-                     paymentData: PaymentData,
-                     completion: @escaping CloudpaymentsRequestCompletion<TransactionResponse>) {
-        let parameters = generateParams(cardCryptogramPacket: cardCryptogramPacket,
-                                        email: email,
-                                        paymentData: paymentData)
-        AuthRequest(params: patch(params: parameters), headers: getDefaultHeaders(), apiUrl: apiUrl).execute(keyDecodingStrategy: .convertToUpperCamelCase, onSuccess: {
-            response in
-            completion(response, nil) 
-            
-            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/auth", success: true)
-            
-        }, onError: { error in
-            
-            LoggerService.shared.logApiRequest(method: "POST", url: "https://api.cloudpayments.ru/payments/cards/auth", success: false)
-            
-            completion(nil, error)
-        })
-    }
-    
-    fileprivate static func determineSaveCardMode(_ configuration: PaymentConfiguration) -> Bool? {
-        if let saveCardMode = configuration.saveCardSinglePaymentMode {
-            return saveCardMode
-        } else {
-            return configuration.paymentData.saveCard
         }
     }
     
@@ -212,11 +135,11 @@ public class CloudpaymentsApi {
             }
             
             let value = ButtonConfiguration(isOnTPayButton: isOnTPay,
-                                                isOnSbpButton: isOnSbp,
-                                                isOnSberPayButton: isOnSberPay,
-                                                successRedirectUrl: result.model.terminalFullUrl,
-                                                failRedirectUrl: result.model.terminalFullUrl,
-                                                isTest: result.model.isTest)
+                                            isOnSbpButton: isOnSbp,
+                                            isOnSberPayButton: isOnSberPay,
+                                            successRedirectUrl: result.model.terminalFullUrl,
+                                            failRedirectUrl: result.model.terminalFullUrl,
+                                            isTest: result.model.isTest)
             
             completion(value)
             
@@ -231,308 +154,298 @@ public class CloudpaymentsApi {
         }
     }
     
-    public class func getSbpLink(with configuration: PaymentConfiguration, 
-                                 completion handler: @escaping (AltPayTransactionResponse?) -> Void) {
-        
-        let publicId = configuration.publicId
-        let amount = configuration.paymentData.amount
-        let accountId = configuration.paymentData.accountId
-        let invoiceId = configuration.paymentData.invoiceId
-        let description = configuration.paymentData.description
-        let currency = configuration.paymentData.currency
-        let email = configuration.paymentData.email
-        let jsonData = configuration.paymentData.getJsonData()
-        let successRedirectUrl = configuration.successRedirectUrl
-        let apiUrl = configuration.apiUrl
-        
-        var params = [
-            "PublicId": publicId,
-            "Amount" :  amount,
-            "InvoiceId": invoiceId,
-            "Currency" : currency,
-            "AccountId": accountId,
-            "Device" : "MobileApp",
-            "Description" : description,
-            "Email" : email,
-            "TtlMinutes" : 30,
-            "Scenario": "7",
-            "JsonData": jsonData,
-        ] as [String : Any?]
     
-        if let saveCard = determineSaveCardMode(configuration) {
-            params["SaveCard"] = saveCard
-        }
-        
-        if let successRedirectUrl = successRedirectUrl {
-            params["SuccessRedirectUrl"] = successRedirectUrl
-        }
-        
-        let request = SbpLinkRequest(params: params,
-                                     apiUrl: apiUrl)
-        
-        request.execute { result in
-            handler(result.model)
-            
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
-            
-        } onError: { error in
-            
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
-            
-            print(error.localizedDescription)
-            handler(nil)
-        }
-    }
-    
-    public class func getTPayLink(with configuration: PaymentConfiguration,
-                                        completion handler: @escaping (AltPayTransactionResponse?) -> Void) {
-                
-        let publicId = configuration.publicId
-        let amount = configuration.paymentData.amount
-        let accountId = configuration.paymentData.accountId
-        let invoiceId = configuration.paymentData.invoiceId
-        let description = configuration.paymentData.description
-        let currency = configuration.paymentData.currency
-        let email = configuration.paymentData.email
-        let sсheme: Scheme = configuration.useDualMessagePayment ? .auth : .charge
-        let jsonData = configuration.paymentData.getJsonData()
-        let successRedirectUrl = configuration.successRedirectUrl
-        let failRedirectUrl = configuration.failRedirectUrl
-        let apiUrl = configuration.apiUrl
-        
-        var params = [
-            "PublicId": publicId,
-            "Amount" : amount,
-            "AccountId": accountId,
-            "InvoiceId": invoiceId,
-            "Browser" : nil,
-            "Currency" : currency,
-            "Device" : "MobileApp",
-            "Description" : description,
-            "Email" : email,
-            "Os" : "iOS",
-            "Scheme" : sсheme.rawValue,
-            "TtlMinutes" : 30,
-            "SuccessRedirectUrl" : successRedirectUrl,
-            "FailRedirectUrl" : failRedirectUrl,
-            "Webview" : true,
-            "Scenario": "7",
-            "JsonData": jsonData,
-        ] as [String : Any?]
-        
-        if let saveCard = determineSaveCardMode(configuration) {
-            params["SaveCard"] = saveCard
-        }
-        
-        let request = TPayLinkRequest(params: params,
-                                      apiUrl: apiUrl)
-        
-        request.execute { result in
-            handler(result.model)
-                    
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
-            
-        } onError: { error in
-            
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
-            
-            print(error.localizedDescription)
-            handler(nil)
-        }
-    }
-    
-    public class func getSberPayLink(with configuration: PaymentConfiguration,
-                                     completion handler: @escaping (AltPayTransactionResponse?) -> Void) {
-                
-        let publicId = configuration.publicId
-        let amount = configuration.paymentData.amount
-        let accountId = configuration.paymentData.accountId
-        let invoiceId = configuration.paymentData.invoiceId
-        let description = configuration.paymentData.description
-        let currency = configuration.paymentData.currency
-        let email = configuration.paymentData.email
-        let sсheme: Scheme = configuration.useDualMessagePayment ? .auth : .charge
-        let jsonData = configuration.paymentData.getJsonData()
-        let successRedirectUrl = configuration.successRedirectUrl
-        let failRedirectUrl = configuration.failRedirectUrl
-        let apiUrl = configuration.apiUrl
-        
-        var params = [
-            "PublicId": publicId,
-            "Amount" : amount,
-            "AccountId": accountId,
-            "InvoiceId": invoiceId,
-            "Browser" : nil,
-            "Currency" : currency,
-            "Device" : "MobileApp",
-            "Description" : description,
-            "Email" : email,
-            "Os" : "iOS",
-            "Scheme" : sсheme.rawValue,
-            "TtlMinutes" : 30,
-            "SuccessRedirectUrl" : successRedirectUrl,
-            "FailRedirectUrl" : failRedirectUrl,
-            "Webview" : true,
-            "Scenario": "7",
-            "JsonData": jsonData,
-        ] as [String : Any?]
-        
-        if let saveCard = determineSaveCardMode(configuration) {
-            params["SaveCard"] = saveCard
-        }
-     
-        let request = SberPayLinkRequest(params: params,
-                                         apiUrl: apiUrl)
-        
-        request.execute { result in
-            handler(result.model)
-            
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
-            
-        } onError: { error in
-            
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
-            
-            print(error.localizedDescription)
-            handler(nil)
-        }
-    }
-    
-    public class func getWaitStatus(_ configuration: PaymentConfiguration,
-                                    _ transactionId: Int64,
-                                    _ publicId: String) {
-        
-        let apiUrl = configuration.apiUrl
-        
-        let params = [
-            "TransactionId": transactionId,
-            "PublicId": publicId,
-        ] as [String : Any?]
-        
-        let request = WaitStatusRequest(params: params,
-                                        apiUrl: apiUrl)
-        
-        request.execute { value in
-            NotificationCenter.default.post(name: ObserverKeys.generalObserver.key,
-                                            object: value)
-            
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
-            
-        } onError: { error in
-            
-            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
-            
-            print(error.localizedDescription)
-            NotificationCenter.default.post(name: ObserverKeys.generalObserver.key,
-                                            object: error)
-            return
-        }
-    }
-    
-    public func post3ds(transactionId: String, 
-                        threeDsCallbackId: String,
-                        paRes: String, completion: @escaping (_ result: ThreeDsResponse) -> ()) {
-        
-        let mdParams = ["TransactionId": transactionId,
-                        "ThreeDsCallbackId": threeDsCallbackId,
-                        "SuccessUrl": self.threeDsSuccessURL,
-                        "FailUrl": self.threeDsFailURL]
-        if let mdParamsData = try? JSONSerialization.data(withJSONObject: mdParams, options: .sortedKeys), let mdParamsStr = String.init(data: mdParamsData, encoding: .utf8) {
-            let parameters: [String: Any] = [
-                "MD" : mdParamsStr,
-                "PaRes" : paRes
-            ]
-
-            PostThreeDsRequest(params: parameters, headers: getDefaultHeaders(), apiUrl: apiUrl).execute(keyDecodingStrategy: .convertToUpperCamelCase, onSuccess: { r in
-            }, onError: { error in
-            }, onRedirect: { [weak self] request in
-                guard let self = self else {
-                    return true
-                }
-                
-                if let url = request.url {
-                    let items = url.absoluteString.split(separator: "&").filter { $0.contains("ReasonCode")}
-                    var reasonCode: String? = nil
-                    if !items.isEmpty, let params = items.first?.split(separator: "="), params.count == 2 {
-                        reasonCode = String(params[1]).removingPercentEncoding
-                    }
-                    
-                    LoggerService.shared.logApiRequest(method: request.httpMethod ?? "", url: url.absoluteString, success: true)
-
-                    if url.absoluteString.starts(with: self.threeDsSuccessURL) {
-                        DispatchQueue.main.async {
-                            let r = ThreeDsResponse.init(success: true, reasonCode: reasonCode)
-                            completion(r)
-                        }
-                        
-                        return false
-                    } else if url.absoluteString.starts(with: self.threeDsFailURL) {
-                        DispatchQueue.main.async {
-                            let r = ThreeDsResponse.init(success: false, reasonCode: reasonCode)
-                            completion(r)
-                        }
-                        
-                        LoggerService.shared.logApiRequest(method: request.httpMethod ?? "", url: url.absoluteString, success: false)
-                        
-                        return false
-                    } else {
-                        return true
-                    }
-                } else {
-                    return true
-                }
-            })
-        } else {
-            completion(ThreeDsResponse.init(success: false, reasonCode: ""))
-        }
-    }
-    
-    private func generateParams(cardCryptogramPacket: String,
-                                email: String?,
-                                paymentData: PaymentData) -> [String: Any] {
-        
-        var parameters: [String: Any] = [
-            "Amount" : paymentData.amount, // Сумма платежа (Обязательный)
-            "Currency" : paymentData.currency, // Валюта (Обязательный)
-            "Name" : paymentData.cardholderName ?? defaultCardHolderName, // Имя держателя карты в латинице (Обязательный для всех платежей кроме Apple Pay и Google Pay)
-            "CardCryptogramPacket" : cardCryptogramPacket, // Криптограмма платежных данных (Обязательный)
-            "Email" : email ?? "", // E-mail, на который будет отправлена квитанция об оплате
-            "InvoiceId" : paymentData.invoiceId ?? "", // Номер счета или заказа в вашей системе (Необязательный)
-            "Description" : paymentData.description ?? "", // Описание оплаты в свободной форме (Необязательный)
-            "AccountId" : paymentData.accountId ?? "", // Идентификатор пользователя в вашей системе (Необязательный)
-            "Payer" : paymentData.payer?.dictionary as Any, // Доп. поле, куда передается информация о плательщике. (Необязательный)
-            "scenario" : 7
+    public class func getSbpLinkIntentApi(puid: String,
+                                          schema: String,
+                                          configuration: PaymentConfiguration,
+                                          completion handler: @escaping (Int?, String?) -> Void) {
+        var queryItems = [
+            "webview": "false",
+            "puid": puid
         ]
         
-        if let jsonData = paymentData.getJsonData() {
-            parameters["JsonData"] = jsonData // Любые другие данные, которые будут связаны с транзакцией, в том числе инструкции для создания подписки или формирования онлайн-чека (Необязательный)
+        if !schema.isEmpty {
+            queryItems["schema"] = schema
         }
         
-        if let saveCard = paymentData.saveCard {
-            parameters["SaveCard"] = saveCard
+        guard let sbpLink = configuration.paymentData.paymentLinks["Sbp"] else {
+            print("[getSbpLinkIntentApi] Ссылка Sbp отсутствует в paymentLinks")
+            handler(nil, nil)
+            return
         }
         
-        if let splitsDataArray = paymentData.splits {
-            let splitsDictArray = splitsDataArray.flatMap { $0.splits.map { $0.dictionary } }
-            parameters["Splits"] = splitsDictArray
-        }
+        print("[getSbpLinkIntentApi] Ссылка Sbp: \(sbpLink)")
         
-        return parameters
-    }
-
-    private func patch(params: [String: Any]) -> [String: Any] {
-        var parameters = params
-        parameters["PublicId"] = self.publicId
-        return parameters
+        let request = SbpLinkRequestIntent(queryItems: queryItems, params: [:], apiUrl: sbpLink)
+        
+        print("[getSbpLinkIntentApi] Формируем запрос с URL: \(sbpLink)")
+        print("[getSbpLinkIntentApi] Query Items: \(queryItems)")
+        
+        request.executeWithStatusCode { statusCode, resultLink in
+            print("[getSbpLinkIntentApi] Получена ссылка: \(resultLink)")
+            
+            handler(statusCode, resultLink)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
+        } onError: { statusCode, error in
+            handler(statusCode, nil)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+        }
     }
     
-    private func getDefaultHeaders() -> [String: String] {
-        var headers = [String: String]()
-        headers["MobileSDKSource"] = self.source.rawValue
-        return headers
+    public class func intentPatchById(configuration: PaymentConfiguration,
+                                      patches: [[String: Any]],
+                                      completion: @escaping (PaymentIntentResponse?) -> Void) {
+        guard let intentId = configuration.paymentData.intentId else {
+            print("PATCH: intentId отсутствует")
+            completion(nil)
+            return
+        }
+        
+        guard let bodyData = try? JSONSerialization.data(withJSONObject: patches, options: []) else {
+            print("PATCH: не удалось сериализовать JSON")
+            completion(nil)
+            return
+        }
+        
+        var headers: [String: String] = [
+            "Content-Type": "application/json-patch+json"
+        ]
+        
+        if let secret = configuration.paymentData.secret {
+            headers["Secret"] = secret
+        }
+        
+        let request = IntentPatchById(
+            patchBody: bodyData,
+            intentId: intentId,
+            apiUrl: baseIntentURLString,
+            headers: headers
+        )
+        
+        print("PATCH: отправка запроса")
+        print("PATCH: \(patches)")
+        
+        request.execute { result in
+            
+            print("PATCH: ответ получен")
+            
+            completion(result)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
+        } onError: { error in
+            
+            print("PATCH: ошибка: \(error.localizedDescription)")
+            completion(nil)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+        }
     }
     
-    class func loadImage(url string: String, completion: @escaping (UIImage?) -> Void) {
+    public class func createIntent(with configuration: PaymentConfiguration,
+                                   completion handler: @escaping (PaymentIntentResponse?) -> Void) {
+        
+        let publicId = configuration.publicId
+        let currency = configuration.paymentData.currency
+        let sсheme: IntentScheme = configuration.useDualMessagePayment ? .dual : .single
+        let type = "Default"
+        let scenario = "7"
+        let amount = configuration.paymentData.amount
+        let accountId = configuration.paymentData.accountId
+        let email = configuration.paymentData.email
+        let paymentUrl = "cloudpayments://sdk.cp.ru"
+        let culture = configuration.paymentData.cultureName
+        let payer = configuration.paymentData.payer
+        let recurrent = configuration.paymentData.recurrent?.toDictionary()
+        let receipt = configuration.paymentData.receipt?.toDictionary()
+        let successRedirectUrl = configuration.successRedirectUrl
+        let failRedirectUrl = configuration.failRedirectUrl
+        
+        let metadata: [String: Any]? = {
+            if let jsonString = configuration.paymentData.jsonData,
+               let data = jsonString.data(using: .utf8) {
+                return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            }
+            return nil
+        }()
+        
+        let params: [String: Any?] = [
+            "publicTerminalId": publicId,
+            "currency": currency,
+            "paymentSchema": sсheme.rawValue,
+            "culture": culture,
+            "type": type,
+            "scenario": scenario,
+            "amount": amount,
+            "paymentUrl": paymentUrl,
+            "receiptEmail": email,
+            "userInfo": [
+                "accountId": accountId,
+                "firstName": payer?.firstName,
+                "lastName": payer?.lastName,
+                "middleName": payer?.middleName,
+                "address": payer?.address,
+                "street": payer?.street,
+                "city": payer?.city,
+                "country": payer?.country,
+                "phone": payer?.phone,
+                "postcode": payer?.postcode
+            ],
+            "recurrent": recurrent,
+            "receipt": receipt,
+            "metadata": metadata,
+            "successRedirectUrl": successRedirectUrl,
+            "failRedirectUrl":  failRedirectUrl
+            
+        ] as [String : Any?]
+        
+        let request = CreateIntentRequest(params: params,
+                                          apiUrl: baseIntentURLString)
+        request.execute { result in
+            handler(result)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
+        } onError: { error in
+            print(error.localizedDescription)
+            handler(nil)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+        }
+    }
+    
+    public class func getTPayLinkIntentApi(puid: String,
+                                           configuration: PaymentConfiguration,
+                                           completion handler: @escaping (Int?, String?) -> Void) {
+        let queryItems = [
+            "webview": "false",
+            "puid": puid
+        ]
+        
+        guard let tpayLink = configuration.paymentData.paymentLinks["TinkoffPay"] else {
+            print("[getTPayLinkIntentApi] Ссылка TinkoffPay отсутствует в paymentLinks")
+            handler(nil, nil)
+            return
+        }
+        
+        print("[getTPayLinkIntentApi] Ссылка TinkoffPay: \(tpayLink)")
+        
+        let request = TPayLinkRequestIntent(queryItems: queryItems, params: [:], apiUrl: tpayLink)
+        
+        print("[getTPayLinkIntentApi] Формируем запрос с URL: \(tpayLink)")
+        print("[getTPayLinkIntentApi] Query Items: \(queryItems)")
+        
+        request.executeWithStatusCode { statusCode, resultLink in
+            print("[getTPayLinkIntentApi] Получена ссылка: \(resultLink)")
+            handler(statusCode, resultLink)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
+        } onError: { statusCode, error in
+            handler(statusCode, nil)
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+        }
+    }
+    
+    public class func getSberPayLinkIntentApi(puid: String,
+                                              configuration: PaymentConfiguration,
+                                              completion handler: @escaping (Int?, SberPayResponse?) -> Void) {
+        let queryItems = [
+            "webview": "false",
+            "puid": puid
+        ]
+        
+        guard let sberPayLink = configuration.paymentData.sberPayData else {
+            print("[getSberPayLinkIntentApi] Ссылка SberPay отсутствует в paymentLinks")
+            handler(nil, nil)
+            return
+        }
+        
+        print("[getSberPayLinkIntentApi] Ссылка SberPay: \(sberPayLink)")
+        
+        let request = SberPayLinkRequestIntent(queryItems: queryItems, params: [:], apiUrl: sberPayLink)
+        
+        print("[getSberPayLinkIntentApi] Формируем запрос с URL: \(sberPayLink)")
+        print("[getSberPayLinkIntentApi] Query Items: \(queryItems)")
+        
+        request.executeWithStatusCode { statusCode, resultLink in
+            print("[getSberPayLinkIntentApi] Получена ссылка: \(resultLink)")
+            handler(statusCode, resultLink)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
+        } onError: { statusCode, error in
+            print("[getSberPayLinkIntentApi] Ошибка выполнения запроса SberPayLinkRequestIntent: \(error.localizedDescription)")
+            handler(statusCode, nil)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+        }
+    }
+    
+    public class func getIntentWaitStatus(_ configuration: PaymentConfiguration,
+                                          type: PaymentMethodType,
+                                          completion: @escaping (Int?) -> Void) {
+        guard let intentId = configuration.paymentData.intentId else { return }
+        
+        let request = IntentStatusWait(intentId: intentId, apiUrl: baseIntentURLString)
+        
+        let observerName: Notification.Name
+        switch type {
+        case .tpay:
+            observerName = ObserverKeys.intentTpayObserver.key
+        case .sberPay:
+            observerName = ObserverKeys.intentSberPayObserver.key
+        case .sbp:
+            observerName = ObserverKeys.intentSbpObserver.key
+        }
+        
+        request.executeWithStatusCode { statusCode, value in
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
+            completion(statusCode)
+            
+            NotificationCenter.default.post(name: observerName, object: value)
+        } onError: { statusCode, error in
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+            
+            completion(statusCode)
+            
+            NotificationCenter.default.post(name: observerName, object: error)
+        }
+    }
+    
+    public func createIntentApiPay(cardCryptogram: String,
+                                   with configuration: PaymentConfiguration,
+                                   completion: @escaping (Int?, PaymentIntentResponse?) -> Void) {
+        
+        let params = ["Id": configuration.paymentData.intentId,
+                      "PaymentMethod": "Card",
+                      "Cryptogram": cardCryptogram]
+        
+        print(cardCryptogram)
+        print(params)
+        
+        let request = CreateIntentApiPayRequest(params: params,
+                                                apiUrl: CloudpaymentsApi.baseIntentURLString)
+        
+        request.executeWithStatusCode { statusCode, result in
+            print("Status Code: \(statusCode), Result: \(String(describing: result))")
+            completion(statusCode, result)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: true)
+            
+        } onError: { statusCode, error in
+            completion(statusCode, nil)
+            
+            LoggerService.shared.logApiRequest(method: request.data.method.rawValue, url: request.data.path, success: false)
+        }
+    }
+    
+    class func loadImage(url string: String,
+                         completion: @escaping (UIImage?) -> Void) {
         
         guard let url = URL(string: string) else { return completion(nil) }
         
@@ -549,15 +462,15 @@ public typealias CloudpaymentsRequestCompletion<T> = (_ response: T?, _ error: E
 
 private struct CloudpaymentsCodingKey: CodingKey {
     var stringValue: String
-
+    
     init(stringValue: String) {
         self.stringValue = stringValue
     }
-
+    
     var intValue: Int? {
         return nil
     }
-
+    
     init?(intValue: Int) {
         return nil
     }
@@ -577,3 +490,40 @@ extension JSONDecoder.KeyDecodingStrategy {
         })
     }
 }
+
+extension CloudpaymentsApi {
+    public class func getPublicKey(completion: @escaping (PublicKeyResponse?, Error?) -> Void) {
+        let publicKeyUrl = baseURLString + "payments/publickey"
+        guard let url = URL(string: publicKeyUrl) else {
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        let session = URLSession.shared
+        session.dataTask(with: request) { data, response, error in
+            guard let method = request.httpMethod else {
+                return
+            }
+            guard let path = request.url?.absoluteString else {
+                return
+            }
+            
+            guard let data = data else {
+                completion(nil, CloudpaymentsError.networkError)
+                return
+            }
+            
+            do {
+                let response = try JSONDecoder().decode(PublicKeyResponse.self, from: data)
+                completion(response, nil)
+                LoggerService.shared.logApiRequest(method: method, url: path, success: true)
+            } catch {
+                LoggerService.shared.logApiRequest(method: method, url: path, success: false)
+                completion(nil, error)
+            }
+        }.resume()
+    }
+}
+

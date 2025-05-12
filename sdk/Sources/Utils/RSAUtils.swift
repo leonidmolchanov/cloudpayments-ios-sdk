@@ -14,7 +14,7 @@ class RSAUtils {
     private static let PADDING_FOR_DECRYPT = SecPadding()
 
     @available(iOS, introduced: 1.2.0)
-    public class RSAUtilsError: NSError {
+    public class RSAUtilsError: NSError, @unchecked Sendable {
         init(_ message: String) {
             super.init(domain: "ru.cloudpayments.SDK.RSAUtils", code: 500, userInfo: [
                 NSLocalizedDescriptionKey: message

@@ -13,118 +13,170 @@ protocol ProgressSberPayProtocol: AnyObject {
 }
 
 protocol ProgressSberPayViewControllerProtocol: AnyObject {
-    func resultPayment(result: PaymentSberPayView.PaymentAction, error: String?, transactionId: Transaction?)
-    func openLinkURL(url: URL)
-    var isTest: Bool? { get }
+    func resultPayment(result: PaymentSberPayView.PaymentAction, error: String?, transaction: PaymentTransactionResponse?)
+    func openLinkUrls(urls: [URL])
+    func showAlert(message: String?, title: String?)
 }
 
 final class ProgressSberPayPresenter {
     
-    //MARK: - Properties
+    // MARK: - Properties
     
     let configuration: PaymentConfiguration
-    private var transactionId: Int64?
+    private let sberPayPollingService: PaymentPollingService
+    private var currentPuid: String?
     weak var view: ProgressSberPayViewControllerProtocol?
     
-    //MARK: - Init
+    // MARK: - Init
     
-    init(configuration: PaymentConfiguration) {
+    init(configuration: PaymentConfiguration, sberPayPollingService: PaymentPollingService = PaymentPollingServiceImpl()) {
         self.configuration = configuration
+        self.sberPayPollingService = sberPayPollingService
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(intentSberPayObserverStatus(_:)),
+            name: ObserverKeys.intentSberPayObserver.key,
+            object: nil
+        )
     }
     
-    //MARK: - Private Methods
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        stopPolling()
+    }
     
-    private func checkTransactionId() {
-        let publicId = configuration.publicId
-        guard let transactionId = transactionId else { return }
+    // MARK: - Polling
     
-        NotificationCenter.default.removeObserver(self, name: ObserverKeys.generalObserver.key, object: nil)
+    func stopPolling() {
+        sberPayPollingService.stopPolling()
+    }
+    
+    private func pollStatus() {
+        CloudpaymentsApi.getIntentWaitStatus(configuration, type: .sberPay) { [weak self] statusCode in
+            guard let self = self else { return }
+            if statusCode == 200 {
+                print("pollStatus: 200 — продолжаем опрос")
+            } else {
+                self.stopPolling()
+                self.view?.showAlert(message: nil, title: .errorWordTitle)
+            }
+            print("pollStatus вызван — отправка запроса на getIntentWaitStatus c type sberPay")
+        }
+    }
+    
+    private func startPolling() {
+        stopPolling()
         
-        NotificationCenter.default.addObserver(self, selector: #selector(observerStatus(_:)),
-                                               name: ObserverKeys.generalObserver.key, object: nil)
-        CloudpaymentsApi.getWaitStatus(configuration, transactionId, publicId)
+        sberPayPollingService.startPolling(taskName: .sberPayTransactionPolling, interval: 3) { [weak self] in
+            guard let self = self else { return }
+            self.pollStatus()
+        }
     }
+    
+    // MARK: - Intent Status Handling
+    
+    @objc private func intentSberPayObserverStatus(_ notification: NSNotification) {
+        guard let statusModel = notification.object as? PaymentTransactionStatusModel else {
+            return
+        }
 
-    fileprivate func statusCodeNotification(_ status: StatusPay, _ notification: NSNotification) {
-        switch status {
-        case .created, .pending:
-            checkTransactionId()
-            
-        case .authorized, .completed, .cancelled:
-            let transaction = Transaction(transactionId: transactionId)
-            transactionId = nil
-            NotificationCenter.default.removeObserver(self, name: ObserverKeys.generalObserver.key, object: nil)
-            self.view?.resultPayment(result: .success, error: nil, transactionId: transaction)
-            
-        case .declined:
-            transactionId = nil
-            let error = notification.object as? Error
-            let code = error?._code
-            let string = code == nil ? "" : String(code!)
-            let descriptionError = ApiError.getFullErrorDescription(code: string)
-            view?.resultPayment(result: .error, error: descriptionError, transactionId: nil)
+        guard let intentStatusRaw = statusModel.status,
+              let intentStatus = IntentWaitStatus(rawValue: intentStatusRaw) else {
+            print("Статус интента невалиден")
+            return
+        }
+
+        print("Статус интента при опросе транзакции: \(intentStatus.rawValue)")
+
+        guard let puid = currentPuid,
+              let transactions = statusModel.transactions else {
+            print("Нет транзакций или puid")
+            return
+        }
+
+        let matchedTransactions = transactions.filter { $0.puid == puid }
+
+        if matchedTransactions.isEmpty {
+            print("Транзакции с текущим puid не найдены")
+            return
+        }
+
+        for transaction in matchedTransactions {
+            guard let transactionStatusRaw = transaction.status,
+                  let intentTransactionStatus = IntentTransactionStatus(rawValue: transactionStatusRaw) else {
+                print("Транзакция без статуса или с невалидным статусом")
+                continue
+            }
+
+            print("Обработка транзакции — статус: \(intentTransactionStatus.rawValue)")
+            handleIntentTransactionFinalStatus(intentTransactionStatus, transaction: transaction)
+        }
+
+        if intentStatus == .succeeded {
+            stopPolling()
         }
     }
     
-    @objc private func observerStatus(_ notification: NSNotification) {
+    // MARK: - Transaction Status Handling
+    
+    private func handleIntentTransactionFinalStatus(_ status: IntentTransactionStatus, transaction: PaymentTransactionResponse) {
+        stopPolling()
         
-        guard let transactionStatus = notification.object as? TransactionStatusResponse else {
+        let transactionId = transaction.transactionId
+        let transactionErrorCode = transaction.code
+        
+        switch status {
+        case .authorized, .completed:
+            print("Оплата успешна — \(status.rawValue)")
+            print("Номер транзакции \(String(describing: transactionId))")
+            let paymentIntentTransaction = PaymentTransactionResponse(
+                transactionId: transactionId,
+                paymentMethod: nil,
+                puid: currentPuid,
+                status: status.rawValue,
+                code: nil
+            )
+            view?.resultPayment(result: .success, error: nil, transaction: paymentIntentTransaction)
             
-            if let error = notification.object as? Error {
-                let code = error._code < 0 ? -error._code : error._code
-                if code > 1000 {checkTransactionId(); return }
-                let string = String(code)
-                let description = ApiError.getFullErrorDescription(code: string)
-                view?.resultPayment(result: .error, error: description, transactionId: nil)
-                return
-            }
-            
-            checkTransactionId()
-            return
-            
+        case .declined, .cancelled:
+            print("Оплата отклонена — code: \(String(describing: transactionErrorCode))")
+            print("Номер транзакции \(String(describing: transactionId))")
+            let errorMessage = ApiError.getFullErrorDescriptionIntentApi(from: transactionErrorCode)
+            let paymentIntentTransaction = PaymentTransactionResponse(
+                transactionId: transactionId,
+                paymentMethod: nil,
+                puid: currentPuid,
+                status: status.rawValue,
+                code: transactionErrorCode
+            )
+            view?.resultPayment(result: .error, error: errorMessage, transaction: paymentIntentTransaction)
         }
-        
-        guard let rawValue = transactionStatus.model?.status,
-              let status = StatusPay(rawValue: rawValue)
-        else {
-            
-            if let statusCode = transactionStatus.model?.statusCode, let statusPay = StatusPay(rawValue: statusCode) {
-                statusCodeNotification(statusPay, notification)
-                return
-            }
-            return
-        }
-        
-        statusCodeNotification(status, notification)
     }
 }
 
 //MARK: Input
 
 extension ProgressSberPayPresenter {
-    func getLink() {
-        CloudpaymentsApi.getSberPayLink(with: configuration) { [weak self] result in
-            guard let self = self, let transactionId = result?.transactionId, let qrURL = result?.qrURL, let url = URL(string: qrURL) else {
-                self?.view?.resultPayment(result: .error, error: result?.message, transactionId: nil)
-                return
-            }
-            
-            let message = result?.message
-            self.transactionId = transactionId
-            
-            var status: StatusPay {
-                guard let message = message, let value = StatusPay(rawValue: message) else { return .declined }
-                return value
-            }
-            
-            switch status {
-            case .created, .pending:
-                self.checkTransactionId()
+    func getSberPayLinkIntentApi() {
+        let puid = UUID().uuidString
+        currentPuid = puid
+
+        CloudpaymentsApi.getSberPayLinkIntentApi(puid: puid, configuration: configuration) { [weak self] statusCode, sberPayLink in
+            guard let self = self else { return }
+            switch statusCode {
+            case 200:
+                guard let links = sberPayLink?.redirectUrls, !links.isEmpty else {
+                    self.view?.showAlert(message: nil, title: .banksAppNotOpen)
+                    return
+                }
+                let validUrls = links.compactMap { URL(string: $0) }
+                self.view?.openLinkUrls(urls: validUrls)
+                self.startPolling()
+            case 409:
+                self.view?.resultPayment(result: .error, error: .orderAlreadyBeenPaid, transaction: nil)
             default:
-                self.checkTransactionId()
+                self.view?.showAlert(message: nil, title: .errorWordTitle)
             }
-            
-            self.view?.openLinkURL(url: url)
         }
     }
 }

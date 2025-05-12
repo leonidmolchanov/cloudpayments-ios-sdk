@@ -114,7 +114,17 @@ public final class PaymentCardForm: PaymentForm {
                 return
             }
             
-            guard self.isValid(), let cryptogram = Card.makeCardCryptogramPacket(self.cardNumberTextField.text!, expDate: self.cardExpDateTextField.cardExpText!, cvv: self.cardCvvTextField.text!, merchantPublicID: self.configuration.publicId)
+            guard let pem = paymentData.pem else {
+                print("Ошибка: Public key (Pem) не найден.")
+                return
+            }
+            
+            guard let version = paymentData.version else {
+                print("Ошибка: Key version не найден.")
+                return
+            }
+            
+            guard self.isValid(), let cryptogram = Card.makeCardCryptogramPacket(cardNumber: self.cardNumberTextField.text!, expDate: self.cardExpDateTextField.cardExpText!, cvv: self.cardCvvTextField.text!, merchantPublicID: self.configuration.publicId, publicKey: pem, keyVersion: version)
             else {
                 self.showAlert(title: .errorWord, message: String.errorCreatingCryptoPacket)
                 return
@@ -166,9 +176,7 @@ public final class PaymentCardForm: PaymentForm {
     }
     
     func setupPanGesture() {
-        // add pan gesture recognizer to the view controller's view (the whole screen)
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(self.handlePanGesture(gesture:)))
-        // change to false to immediately listen on gesture movement
         panGesture.delaysTouchesBegan = false
         panGesture.delaysTouchesEnded = false
         view.addGestureRecognizer(panGesture)
@@ -181,38 +189,27 @@ public final class PaymentCardForm: PaymentForm {
     }
     
     // MARK: Pan gesture handler
+    
     @objc func handlePanGesture(gesture: UIPanGestureRecognizer) {
         let translation = gesture.translation(in: view)
-        // Drag to top will be minus value and vice versa
         
-        // Get drag direction
         let isDraggingDown = translation.y > 0
         
-        // New height is based on value of dragging plus current container height
         let newHeight = currentContainerHeight - translation.y
         
-        // Handle based on gesture state
         switch gesture.state {
         case .changed:
-            // This state will occur when user is dragging
             if newHeight < maximumContainerHeight {
-                // Keep updating the height constraint
                 containerHeightConstraint?.constant = newHeight
-                // refresh layout
                 view.layoutIfNeeded()
             }
             
             if newHeight > defaultHeight && !isDraggingDown  {
-                //self.emailTextField.becomeFirstResponder()
                 UIView.animate(withDuration: 0.9) {
                     self.containerHeightConstraint?.constant = self.defaultHeight
                 }
             }
         case .ended:
-            // This happens when user stop drag,
-            // so we will get the last height of container
-            
-            // Condition 1: If new height is below min, dismiss controller
             if newHeight < dismissibleHigh {
                 self.animateDismissView()
                 let parent = self.presentingViewController
@@ -228,11 +225,9 @@ public final class PaymentCardForm: PaymentForm {
                 
             }
             else if newHeight < defaultHeight {
-                // Condition 2: If new height is below default, animate back to default
                 animateContainerHeight(defaultHeight)
             }
             else if newHeight < maximumContainerHeight && isDraggingDown {
-                // Condition 3: If new height is below max and going down, set to default height
                 animateContainerHeight(defaultHeight)
             }
         default:
@@ -242,32 +237,23 @@ public final class PaymentCardForm: PaymentForm {
     
     func animateContainerHeight(_ height: CGFloat) {
         UIView.animate(withDuration: 0.4) {
-            // Update container height
             self.containerCardBottomConstraint?.constant = height
-            // Call this to trigger refresh constraint
             self.view.layoutIfNeeded()
         }
-        // Save current height
         currentContainerHeight = height
     }
     
-    // MARK: Present and dismiss animation
     func animatePresentContainer() {
-        // update bottom constraint in animation block
         UIView.animate(withDuration: 0.3) {
             self.containerCardBottomConstraint?.constant = 0
-            // call this to trigger refresh constraint
             self.view.layoutIfNeeded()
         }
     }
     
     func animateDismissView() {
-        // hide main view by updating bottom constraint in animation block
         self.dismiss(animated: false)
         UIView.animate(withDuration: 0.3) {
             self.containerCardBottomConstraint?.constant = self.defaultHeight
-            
-            // call this to trigger refresh constraint
             self.view.layoutIfNeeded()
         }
     }
@@ -394,8 +380,9 @@ extension PaymentCardForm: UITextFieldDelegate {
         
         if let cardNumber = cardNumberTextField.text, cardNumber.count >= 6 {
             let cleanCardNumber = Card.cleanCreditCardNo(cardNumber)
-            
-            CloudpaymentsApi.getBinInfo(cleanCardNumber: cleanCardNumber, with: configuration) { [weak self] model, success in
+                        
+            CloudpaymentsApi.getBinInfoWithIntentId(cleanCardNumber: cleanCardNumber, with: configuration) { [weak self] model, success in
+                
                 guard let self = self else { return }
                 guard let success = success else { return }
                 

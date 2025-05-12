@@ -11,15 +11,8 @@ public struct BankInfo: Codable {
     let convertedAmount: String?
     let currency: String?
     let hideCvvInput: Bool?
+    let isCardAllowed: Bool?
     let cardType: NameCardType.RawValue?
-    
-    enum CodingKeys: String, CodingKey {
-        case logoURL = "LogoUrl"
-        case convertedAmount = "ConvertedAmount"
-        case currency = "Currency"
-        case hideCvvInput = "HideCvvInput"
-        case cardType = "CardType"
-    }
+    let bankName: String?
+    let countryCode: Int?
 }
-
-

@@ -17,3 +17,14 @@ public struct ThreeDsResponse {
         self.reasonCode = reasonCode
     }
 }
+
+struct IntentThreeDsResultResponse: Codable {
+    let data: IntentThreeDsData?
+    let errorMessage: String?
+    let success: Bool?
+}
+
+struct IntentThreeDsData: Codable {
+    let success: Bool?
+    let code: String?
+}

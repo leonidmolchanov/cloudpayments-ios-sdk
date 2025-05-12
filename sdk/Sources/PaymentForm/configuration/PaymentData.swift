@@ -55,28 +55,39 @@ public struct PaymentDataPayer: Codable {
 }
 
 public class PaymentData {
-    private (set) var splits: [Splits]?
-    private (set) var payer: PaymentDataPayer?
-    private (set) var amount: String = "0"
-    private (set) var currency: String = "RUB"
-    private (set) var applePayMerchantId: String? = ""
-    private (set) var cardholderName: String?
-    private (set) var description: String?
-    private (set) var accountId: String?
-    private (set) var invoiceId: String?
-    private (set) var cultureName: String?
-    private (set) var receipt: Receipt?
-    private (set) var recurrent: Recurrent?
-    private var jsonData: String?
-    
+    private(set) var splits: [Splits]?
+    private(set) var payer: PaymentDataPayer?
+    private(set) var amount: String = "0"
+    private(set) var currency: String = "RUB"
+    private(set) var applePayMerchantId: String? = ""
+    private(set) var cardholderName: String?
+    private(set) var description: String?
+    private(set) var accountId: String?
+    private(set) var invoiceId: String?
+    private(set) var cultureName: String?
+    private(set) var receipt: Receipt?
+    private(set) var recurrent: Recurrent?
+    private(set) var jsonData: String?
+  
     var email: String?
-    var terminalUrl: String? = nil
     var saveCard: Bool? = nil
     var cryptogram: String?
     var isCvvRequired: Bool?
     var isAllowedNotSanctionedCards: Bool? = nil
     var isQiwi: Bool? = nil
+    var intentId: String? = nil
+    var paymentLinks: [String: String] = [:]
+    var sberPayData: String?
+    var sbpBanks: [Bank]?
+    var intentSaveCardState: IntentSaveCardState?
+    var savedTokenize: Bool? = nil
+    var pem: String?
+    var version: Int?
+    var secret: String?
+    var terminalFullUrl: String? = nil
     var isTest: Bool? = nil
+    
+    var sdkConfiguration: SDKConfiguration?
     
     public init() {
     }
@@ -150,84 +161,8 @@ public class PaymentData {
         return self
     }
     
-    public func getJsonData() -> String? {
-        
-        var baseData: [String: Any] = [:]
-        
-        if let existingJsonData = self.jsonData,
-           let parsedData = convertStringToDictionary(text: existingJsonData) {
-            baseData = parsedData
-        }
-        
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .useDefaultKeys
-        
-        var cloudPayments: [String: Any] = baseData["CloudPayments"] as? [String: Any] ?? [:]
-        
-        if let recurrent = recurrent {
-            if let recurrentData = try? encoder.encode(recurrent),
-               let recurrentJson = try? JSONSerialization.jsonObject(with: recurrentData, options: []) as? [String: Any] {
-                cloudPayments["recurrent"] = recurrentJson
-            } else {
-                print("Failed to encode or convert Recurrent to JSON")
-            }
-        }
-        
-        if let receipt = receipt {
-            if let receiptData = try? encoder.encode(receipt),
-               let receiptJson = try? JSONSerialization.jsonObject(with: receiptData, options: []) as? [String: Any] {
-                cloudPayments["CustomerReceipt"] = receiptJson
-            } else {
-                print("Failed to encode or convert Receipt to JSON")
-            }
-        }
-        
-        if !cloudPayments.isEmpty {
-            baseData["CloudPayments"] = cloudPayments
-        }
-        
-        guard JSONSerialization.isValidJSONObject(baseData) else {
-            print("Invalid JSON structure: \(baseData)")
-            return nil
-        }
-        
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: baseData, options: [])
-            let jsonString = String(data: jsonData, encoding: .utf8)
-            self.jsonData = jsonString // Кэшируем результат
-            return jsonString
-        } catch {
-            print("Failed to serialize JSON: \(error.localizedDescription)")
-            return nil
-        }
-    }
-    
     public func setJsonData(_ jsonData: String) -> PaymentData {
-        
-        let map = convertStringToDictionary(text: jsonData)
-        
-        if (map == nil) {
-            self.jsonData = nil
-            return self
-        }
-        
-        if let data = try? JSONSerialization.data(withJSONObject: map as Any, options: .sortedKeys) {
-            let jsonString = String(data: data, encoding: .utf8)
-            self.jsonData = jsonString
-        }
-        
+        self.jsonData = jsonData
         return self
-    }
-    
-    func convertStringToDictionary(text: String) -> [String:AnyObject]? {
-        if let data = text.data(using: .utf8) {
-            do {
-                let json = try JSONSerialization.jsonObject(with: data, options: .mutableContainers) as? [String:AnyObject]
-                return json
-            } catch {
-                print("JSON data is empty")
-            }
-        }
-        return nil
     }
 }

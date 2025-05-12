@@ -18,6 +18,8 @@ enum CloudpaymentsHTTPResource: String {
     case sbp = "payments/qr/sbp/link"
     case waitStatus = "payments/qr/status/wait"
     case binInfo = "bins/info"
+    case apiIntent = "api/intent"
+    case apiIntentPay = "api/intent/pay"
     
     func asUrl(apiUrl: String) -> String {
         return apiUrl.appending(self.rawValue)

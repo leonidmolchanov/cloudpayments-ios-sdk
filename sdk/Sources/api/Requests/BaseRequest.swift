@@ -12,14 +12,17 @@ open class BaseRequest {
     var params: [String: Any?]
     var headers: [String: String]
     var apiUrl: String
-    
+    var body: Data?     
+
     public init(queryItems: [String: String?] = [:],
                 params: [String: Any?] = [:],
                 headers: [String: String] = [:],
-                apiUrl: String = "") {
+                apiUrl: String = "",
+                body: Data? = nil) {
         self.queryItems = queryItems
         self.params = params
         self.headers = headers
         self.apiUrl = apiUrl
+        self.body = body
     }
 }

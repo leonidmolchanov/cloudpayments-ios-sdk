@@ -6,10 +6,24 @@
 //
 
 import CloudpaymentsNetworking
+import Foundation
 
-final class PostThreeDsRequest: BaseRequest, CloudpaymentsRequestType {
-    typealias ResponseType = TransactionResponse
+final class CreateIntentApiPayRequest: BaseRequest, CloudpaymentsRequestType {
+    typealias ResponseType = PaymentIntentResponse
     var data: CloudpaymentsRequest {
-        return CloudpaymentsRequest(path: CloudpaymentsHTTPResource.post3ds.asUrl(apiUrl: apiUrl), method: .post, params: params, headers: headers)
+        let path = CloudpaymentsHTTPResource.apiIntentPay.asUrl(apiUrl: apiUrl)
+       
+        guard var component = URLComponents(string: path) else { return CloudpaymentsRequest(path: path, method: .post, params: params, headers: headers) }
+       
+        if !queryItems.isEmpty {
+            let items = queryItems.compactMap { return URLQueryItem(name: $0, value: $1) }
+            component.queryItems = items
+        }
+        
+        guard let url = component.url else { return CloudpaymentsRequest(path: path, method: .post, params: params, headers: headers) }
+        let fullPath = url.absoluteString
+        print(fullPath)
+        
+        return CloudpaymentsRequest(path: fullPath, method: .post, params: params, headers: headers)
     }
 }

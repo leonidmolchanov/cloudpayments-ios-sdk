@@ -8,7 +8,6 @@
 
 import UIKit
 import Cloudpayments
-import Foundation
 
 final class DemoViewController: BaseViewController {
     
@@ -167,6 +166,7 @@ final class DemoViewController: BaseViewController {
             price: 300.0,
             quantity: 3.0,
             amount: 900.0,
+            vat: 20,
             method: 0,
             object: 0
         )
@@ -188,8 +188,7 @@ final class DemoViewController: BaseViewController {
         let recurrent = Recurrent(
             interval: "Month",
             period: 1,
-            customerReceipt: receipt,
-            amount: 100
+            customerReceipt: receipt
         )
         
         let payer = PaymentDataPayer(
@@ -216,6 +215,7 @@ final class DemoViewController: BaseViewController {
             .setPayer(payer)
             .setEmail(email)
             .setJsonData(jsonData)
+            .setCultureName("RU-ru")
 //            .setReceipt(receipt)
 //            .setRecurrent(recurrent)
         
@@ -227,8 +227,9 @@ final class DemoViewController: BaseViewController {
             scanner: nil,
             requireEmail: false,
             useDualMessagePayment: footer.demoActionSwitch.isOn,
-            disableApplePay: true,
-            apiUrl: apiUrl
+            disableApplePay: true
+//            successRedirectUrl: "https://ya.ru",
+//            failRedirectUrl: "https://ya.ru"
         )
         
         PaymentForm.present(with: configuration, from: self)
@@ -259,6 +260,14 @@ extension DemoViewController: UITableViewDelegate, UITableViewDataSource {
 
 // MARK: - PaymentDelegate
 extension DemoViewController: PaymentDelegate {
+    func paymentFinishedIntentApi(_ transaction: Int64?) {
+        navigationController?.popViewController(animated: true)
+        
+        if let transactionId = transaction {
+            print("Transaction finished with ID: \(transactionId)")
+        }
+    }
+    
     func onPaymentFinished(_ transactionId: Int64?) {
         navigationController?.popViewController(animated: true)
         
@@ -266,7 +275,7 @@ extension DemoViewController: PaymentDelegate {
             print("Transaction finished with ID: \(transactionId)")
         }
     }
-    
+
     func onPaymentFailed(_ errorMessage: String?) {
         if let errorMessage = errorMessage {
             print("Transaction failed with error: \(errorMessage)")

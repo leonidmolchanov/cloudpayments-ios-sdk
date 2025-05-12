@@ -14,7 +14,7 @@ protocol CustomSbpViewDelegate: AnyObject {
     func searchBarCancelButtonClicked(_ progressSbpView: ProgressSbpView)
     
     func numberOfRow(_ progressSbpView: ProgressSbpView) -> Int
-    func progressSbpView(_ progressSbpView: ProgressSbpView, cellFor row: Int) -> SbpData
+    func progressSbpView(_ progressSbpView: ProgressSbpView, cellFor row: Int) -> Bank
     func progressSbpView(_ progressSbpView: ProgressSbpView, didSelect row: Int)
 }
 
@@ -211,7 +211,7 @@ final class ProgressSbpView: UIView {
             label.bottomAnchor.constraint(equalTo: rightView.bottomAnchor),
         ])
         
-        //dymanic constraint
+        //dynamic constraint
         tableViewHeightConstraint = sbpTableView.topAnchor.constraint(equalTo: self.bottomAnchor, constant: -500)
         tableViewHeightConstraint?.isActive = true
     }

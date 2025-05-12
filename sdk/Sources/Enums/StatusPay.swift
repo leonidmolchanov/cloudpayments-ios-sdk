@@ -31,3 +31,15 @@ enum StatusPayCode: Int {
     case declined = 5
     case completed = 3
 }
+
+enum IntentTransactionStatus: String {
+    case authorized = "Authorized"
+    case completed = "Completed"
+    case declined = "Declined"
+    case cancelled = "Cancelled"
+}
+
+enum IntentWaitStatus: String {
+    case requiresPaymentMethod = "RequiresPaymentMethod"
+    case succeeded = "Succeeded"
+}
