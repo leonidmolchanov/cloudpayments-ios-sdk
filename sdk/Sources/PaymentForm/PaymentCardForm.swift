@@ -86,7 +86,10 @@ public final class PaymentCardForm: PaymentForm {
     }
     
     @IBAction func dismissButtonTapped(_ sender: UIButton) {
-        self.dismiss(animated: true)
+        self.configuration.paymentUIDelegate.paymentFormWillHide()
+        self.dismiss(animated: true) { [weak self] in
+            self?.configuration.paymentUIDelegate.paymentFormDidHide()
+        }
     }
     
     func setupEyeButton() {
@@ -213,6 +216,7 @@ public final class PaymentCardForm: PaymentForm {
             if newHeight < dismissibleHigh {
                 self.animateDismissView()
                 let parent = self.presentingViewController
+                // Это переход назад к PaymentOptionsForm, а НЕ закрытие всей формы
                 self.dismiss(animated: true) {
                     if let parent = parent {
                         if !self.configuration.disableApplePay {

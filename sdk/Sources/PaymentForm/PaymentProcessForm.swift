@@ -195,11 +195,16 @@ public final class PaymentProcessForm: PaymentForm {
                 }
                 
                 if configuration.showResultScreen {
-                    self.dismiss(animated: true)
+                    // Это финальное закрытие формы при показе результата
+                    self.configuration.paymentUIDelegate.paymentFormWillHide()
+                    self.dismiss(animated: true) { [weak self] in
+                        self?.configuration.paymentUIDelegate.paymentFormDidHide()
+                    }
                     return
                 }
                 
                 let parent = self.presentingViewController
+                // Это переход назад к выбору платежа, а НЕ закрытие всей формы
                 self.dismiss(animated: true) { [weak self] in
                     guard let self = self else {
                         return

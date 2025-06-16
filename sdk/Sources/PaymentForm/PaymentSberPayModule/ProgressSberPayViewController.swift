@@ -70,6 +70,7 @@ extension ProgressSberPayViewController: CustomSberPayViewDelegate {
             return
         }
         
+        // Это возвращение к выбору способа оплаты, а НЕ закрытие всей формы
         dismiss(animated: true) {
             self.delegate?.resultPayment(result: .close, error: nil, transactionId: nil)
         }
@@ -115,6 +116,7 @@ extension ProgressSberPayViewController: ProgressSberPayViewControllerProtocol {
         if let delegate = delegate {
             
             if presenter.configuration.showResultScreen {
+                // Переход к экрану результата, НЕ закрытие формы
                 self.dismiss(animated: false) {
                     self.openResultScreens(result, error, transaction, parent)
                 }
@@ -124,6 +126,7 @@ extension ProgressSberPayViewController: ProgressSberPayViewControllerProtocol {
             return
         }
         
+        // Переход к экрану результата, НЕ закрытие формы
         self.dismiss(animated: false) {
             self.openResultScreens(result, error, transaction, parent)
         }
