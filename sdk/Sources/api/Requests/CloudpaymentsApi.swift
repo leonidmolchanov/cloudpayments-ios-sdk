@@ -254,6 +254,7 @@ public class CloudpaymentsApi {
         let type = "Default"
         let scenario = "7"
         let amount = configuration.paymentData.amount
+        let description = configuration.paymentData.description
         let accountId = configuration.paymentData.accountId
         let email = configuration.paymentData.email
         let paymentUrl = "cloudpayments://sdk.cp.ru"
@@ -275,6 +276,7 @@ public class CloudpaymentsApi {
         let params: [String: Any?] = [
             "publicTerminalId": publicId,
             "currency": currency,
+            "description": description,
             "paymentSchema": sсheme.rawValue,
             "culture": culture,
             "type": type,
