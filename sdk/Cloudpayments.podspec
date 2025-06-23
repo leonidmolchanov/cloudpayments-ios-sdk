@@ -19,8 +19,6 @@ Pod::Spec.new do |spec|
 
   spec.author       = { "Anton Ignatov" => "a.ignatov@cp.ru" }
 
-  spec.vendored_frameworks = 'Frameworks/CardIO.xcframework'
-
   spec.platform     = :ios
   spec.ios.deployment_target = "13.0"
 
@@ -28,7 +26,9 @@ Pod::Spec.new do |spec|
   spec.source_files  = 'Sources/**/*.swift'
 
   spec.resource_bundles = { 'CloudpaymentsSDK' => ['Resources/**/*.{txt,json,png,jpeg,jpg,storyboard,xib,xcassets}']} 
-  
+
+  spec.dependency 'CardIO'
+
   spec.requires_arc = true
 
   spec.dependency 'CloudpaymentsNetworking'
