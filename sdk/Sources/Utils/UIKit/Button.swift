@@ -9,7 +9,23 @@
 import UIKit
 
 class Button: UIButton {
-    var onAction: (()->())?
+    private var _onAction: (()->())?
+    
+    var onAction: (()->())? {
+        get { return _onAction }
+        set {
+            // Сначала удаляем старый target
+            self.removeTarget(self, action: #selector(handleAction(_:)), for: .touchUpInside)
+            
+            // Сохраняем новое действие
+            _onAction = newValue
+            
+            // Добавляем target только если есть действие
+            if newValue != nil {
+                self.addTarget(self, action: #selector(handleAction(_:)), for: .touchUpInside)
+            }
+        }
+    }
     
     @IBInspectable var borderWidth : CGFloat = 0.0 {
         didSet {
@@ -34,18 +50,21 @@ class Button: UIButton {
     
     override init(frame: CGRect) {
         super.init(frame: frame)
-        self.addTarget(self, action: #selector(onAction(_:)), for: .touchUpInside)
     }
     
     required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
-        self.addTarget(self, action: #selector(onAction(_:)), for: .touchUpInside)
     }
     
-    @objc func onAction(_ sender: Any) {
-        if self.onAction != nil {
-            self.onAction!()
-        }
+    @objc func handleAction(_ sender: Any) {
+        guard let action = self.onAction else { return }
+        action()
+    }
+    
+    deinit {
+        // Удаляем target перед очисткой
+        self.removeTarget(self, action: #selector(handleAction(_:)), for: .touchUpInside)
+        _onAction = nil
     }
 }
 

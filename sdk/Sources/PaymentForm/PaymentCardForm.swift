@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import AVFoundation
 
 public final class PaymentCardForm: PaymentForm {
     
@@ -92,6 +93,45 @@ public final class PaymentCardForm: PaymentForm {
         }
     }
     
+    @objc private func scanButtonTapped() {
+        print("🔍 scanButtonTapped: Метод вызван")
+        
+        guard let scanner = configuration.scanner else { 
+            print("❌ scanButtonTapped: configuration.scanner равен nil")
+            return 
+        }
+        
+        print("✅ scanButtonTapped: Scanner найден, пытаемся запустить")
+        print("🔍 scanButtonTapped: Scanner type: \(type(of: scanner))")
+        
+        // Проверим доступность камеры
+        print("🔍 scanButtonTapped: Проверяем доступность камеры...")
+        
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            print("✅ scanButtonTapped: Камера доступна")
+        } else {
+            print("❌ scanButtonTapped: Камера НЕ доступна (возможно симулятор?)")
+        }
+        
+        // Проверим разрешения
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        print("🔍 scanButtonTapped: Camera authorization status: \(authStatus.rawValue)")
+        
+        switch authStatus {
+        case .authorized:
+            print("✅ scanButtonTapped: Разрешение на камеру ЕСТЬ")
+        case .denied, .restricted:
+            print("❌ scanButtonTapped: Разрешение на камеру ОТКЛОНЕНО")
+        case .notDetermined:
+            print("⚠️ scanButtonTapped: Разрешение на камеру НЕ ЗАПРОШЕНО")
+        @unknown default:
+            print("❓ scanButtonTapped: Неизвестный статус разрешения")
+        }
+        
+        // Пытаемся запустить сканер
+        startScanner()
+    }
+    
     func setupEyeButton() {
         eyeOpenButton.addTarget(self, action: #selector(secureButtonTapped), for: .touchUpInside)
         eyeOpenButton.setImage(UIImage(named: EyeStatus.closed.toString()), for: .normal)
@@ -144,25 +184,30 @@ public final class PaymentCardForm: PaymentForm {
         }
         
         if configuration.scanner == nil {
+            print("🔍 viewDidLoad: Scanner равен nil, скрываем кнопку")
             scanButton.isHidden = true
         } else {
-            self.scanButton.onAction = { [weak self] in
-                guard let self = self else {
-                    return
-                }
-                if let controller = self.configuration.scanner?.startScanner(completion: { number, month, year, cvv in
-                    self.cardNumberTextField.text = number?.formattedCardNumber()
-                    if let month = month, let year = year {
-                        let y = year % 100
-                        self.cardExpDateTextField.cardExpText = String(format: "%02d/%02d", month, y)
-                    }
-                    self.cardCvvTextField.text = cvv
-                    
-                    self.updatePaymentSystemIcon(cardNumber: number)
-                }) {
-                    self.present(controller, animated: true, completion: nil)
-                }
+            print("🔍 viewDidLoad: Scanner найден, настраиваем кнопку")
+            guard let scanButton = self.scanButton else {
+                print("❌ viewDidLoad: scanButton равен nil")
+                return
             }
+            print("✅ viewDidLoad: scanButton найден, добавляем target")
+            scanButton.addTarget(self, action: #selector(scanButtonTapped), for: .touchUpInside)
+            print("✅ viewDidLoad: Target добавлен для scanButton")
+            
+            // Также попробуем добавить еще одно действие для отладки
+            scanButton.addTarget(self, action: #selector(debugButtonTapped), for: .touchUpInside)
+            
+            // Проверяем состояние кнопки
+            print("🔍 viewDidLoad: scanButton.isHidden = \(scanButton.isHidden)")
+            print("🔍 viewDidLoad: scanButton.isUserInteractionEnabled = \(scanButton.isUserInteractionEnabled)")
+            print("🔍 viewDidLoad: scanButton.alpha = \(scanButton.alpha)")
+            print("🔍 viewDidLoad: scanButton.frame = \(scanButton.frame)")
+            
+            // Проверяем targets
+            print("🔍 viewDidLoad: scanButton targets = \(scanButton.allTargets)")
+            print("🔍 viewDidLoad: scanButton actions = \(scanButton.actions(forTarget: self, forControlEvent: .touchUpInside) ?? [])")
         }
         configureTextFields()
         hideKeyboardWhenTappedAround()
@@ -189,6 +234,12 @@ public final class PaymentCardForm: PaymentForm {
         super.viewDidAppear(animated)
         animatePresentContainer()
         containerHeightConstraint.constant = defaultHeight
+        
+        // Проверяем состояние кнопки сканера после появления view
+        print("🔍 viewDidAppear: Проверяем состояние scanButton")
+        print("🔍 viewDidAppear: scanButton.isHidden = \(scanButton.isHidden)")
+        print("🔍 viewDidAppear: scanButton.isUserInteractionEnabled = \(scanButton.isUserInteractionEnabled)")
+        print("🔍 viewDidAppear: configuration.scanner = \(configuration.scanner != nil ? "не nil" : "nil")")
     }
     
     // MARK: Pan gesture handler
@@ -322,19 +373,26 @@ public final class PaymentCardForm: PaymentForm {
     }
     
     private func updatePaymentSystemIcon(cardNumber: String?){
+        print("🔍 updatePaymentSystemIcon: вызван с cardNumber = \(cardNumber ?? "nil")")
+        
         if let number = cardNumber {
             let cardType = Card.cardType(from: number)
             if cardType != .unknown {
+                print("✅ updatePaymentSystemIcon: Тип карты определен, скрываем scanButton")
                 self.cardTypeIcon.image = cardType.getIcon()
                 self.cardTypeIcon.isHidden = false
                 self.scanButton.isHidden = true
             } else {
+                print("🔍 updatePaymentSystemIcon: Тип карты не определен")
                 self.cardTypeIcon.isHidden = true
                 self.scanButton.isHidden = self.configuration.scanner == nil
+                print("🔍 updatePaymentSystemIcon: scanButton.isHidden = \(self.scanButton.isHidden)")
             }
         } else {
+            print("🔍 updatePaymentSystemIcon: cardNumber равен nil")
             self.cardTypeIcon.isHidden = true
             self.scanButton.isHidden = self.configuration.scanner == nil
+            print("🔍 updatePaymentSystemIcon: scanButton.isHidden = \(self.scanButton.isHidden)")
         }
     }
     
@@ -356,6 +414,111 @@ public final class PaymentCardForm: PaymentForm {
         self.view.layoutIfNeeded()
     }
     
+    deinit {
+        // Очищаем onAction closures для предотвращения retain cycles
+        payButton?.onAction = nil
+        
+        // Удаляем target для scanButton
+        scanButton?.removeTarget(self, action: #selector(scanButtonTapped), for: .touchUpInside)
+        
+        // Инвалидируем таймер
+        cardNumberTimer?.invalidate()
+        cardNumberTimer = nil
+    }
+    
+    @objc private func debugButtonTapped() {
+        print("🎯 debugButtonTapped: ОТЛАДКА - кнопка была нажата!")
+        print("🎯 debugButtonTapped: Это означает, что target-action работает")
+    }
+    
+    private func showScannerErrorAlert() {
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        
+        if !UIImagePickerController.isSourceTypeAvailable(.camera) {
+            // Камера недоступна
+            showAlert(title: "Сканер карты", message: "Камера недоступна на этом устройстве. Введите данные карты вручную.")
+            return
+        }
+        
+        switch authStatus {
+        case .notDetermined:
+            // Разрешение не запрошено - показываем alert с возможностью запросить
+            showPermissionRequestAlert()
+        case .denied, .restricted:
+            // Разрешение отклонено - показываем alert с инструкцией
+            showAlert(title: "Сканер карты", message: "Для сканирования карты необходимо разрешение на использование камеры. Проверьте настройки приложения.")
+        default:
+            // Разрешение есть, но сканер все равно не работает
+            showAlert(title: "Сканер карты", message: "Не удалось запустить сканер карты. Введите данные карты вручную.")
+        }
+    }
+    
+    private func showPermissionRequestAlert() {
+        let alert = UIAlertController(
+            title: "Сканер карты",
+            message: "Необходимо запросить разрешение на использование камеры.",
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "Разрешить", style: .default) { [weak self] _ in
+            self?.requestCameraPermission()
+        })
+        
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel, handler: nil))
+        
+        present(alert, animated: true, completion: nil)
+    }
+    
+    private func requestCameraPermission() {
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+            DispatchQueue.main.async {
+                if granted {
+                    print("✅ requestCameraPermission: Разрешение получено, пытаемся запустить сканер снова")
+                    self?.startScanner()
+                } else {
+                    print("❌ requestCameraPermission: Разрешение отклонено")
+                    self?.showAlert(title: "Сканер карты", message: "Без разрешения на камеру сканирование невозможно. Введите данные карты вручную.")
+                }
+            }
+        }
+    }
+    
+    private func startScanner() {
+        guard let scanner = configuration.scanner else { 
+            print("❌ startScanner: configuration.scanner равен nil")
+            return 
+        }
+        
+        if let controller = scanner.startScanner(completion: { [weak self] number, month, year, cvv in
+            print("🎯 startScanner: Completion вызван")
+            
+            guard let self = self else { 
+                print("❌ startScanner: self равен nil в completion")
+                return 
+            }
+            
+            self.cardNumberTextField.text = number?.formattedCardNumber()
+            if let month = month, let year = year {
+                let y = year % 100
+                self.cardExpDateTextField.cardExpText = String(format: "%02d/%02d", month, y)
+            }
+            self.cardCvvTextField.text = cvv
+            
+            self.updatePaymentSystemIcon(cardNumber: number)
+            print("✅ startScanner: Поля заполнены")
+        }) {
+            print("✅ startScanner: Controller получен, показываем")
+            self.present(controller, animated: true, completion: nil)
+        } else {
+            print("❌ startScanner: scanner.startScanner вернул nil")
+            print("❓ startScanner: Показываем alert с обработкой разрешений")
+            
+            // Показываем alert с обработкой разрешений
+            DispatchQueue.main.async { [weak self] in
+                self?.showScannerErrorAlert()
+            }
+        }
+    }
 }
 
 //MARK: - Delegates for TextField
