@@ -24,7 +24,7 @@ Pod::Spec.new do |spec|
   spec.vendored_frameworks = 'Frameworks/CardIO.xcframework'
 
 
-  spec.source       = { :git => "https://github.com/cloudpayments/CloudPayments-SDK-iOS.git", :tag => "#{spec.version}" }
+  spec.source       = { :git => "https://github.com/leonidmolchanov/cloudpayments-ios-sdk.git", :tag => "#{spec.version}" }
   spec.source_files  = 'sdk/Sources/**/*.swift'
 
   spec.resource_bundles = { 'CloudpaymentsSDK' => ['sdk/Resources/**/*.{txt,json,png,jpeg,jpg,storyboard,xib,xcassets}']} 
