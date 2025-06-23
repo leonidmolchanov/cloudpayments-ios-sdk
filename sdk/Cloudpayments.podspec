@@ -18,7 +18,9 @@ Pod::Spec.new do |spec|
   spec.license      = "{ :type => 'Apache 2.0' }"
 
   spec.author       = { "Anton Ignatov" => "a.ignatov@cp.ru" }
-	
+
+  spec.vendored_frameworks = 'Frameworks/CardIO.xcframework'
+
   spec.platform     = :ios
   spec.ios.deployment_target = "13.0"
 
