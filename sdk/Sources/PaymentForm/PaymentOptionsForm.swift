@@ -199,10 +199,10 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
             guard let self = self else { return }
             
             guard let pem = publicKey?.Pem, let version = publicKey?.Version else {
-                DispatchQueue.main.async {
-                    self.loaderView(isOn: false) {
-                        self.showAlert(title: .errorWord, message: .errorGetPemAndVersion) {
-                            self.dismiss(animated: true)
+                DispatchQueue.main.async { [weak self] in
+                    self?.loaderView(isOn: false) {
+                        self?.showAlert(title: .errorWord, message: .errorGetPemAndVersion) {
+                            self?.dismiss(animated: true)
                         }
                     }
                 }
@@ -216,10 +216,10 @@ final class PaymentOptionsForm: PaymentForm, PKPaymentAuthorizationViewControlle
                 guard let self = self else { return }
                 
                 guard let intent = responseIntent else {
-                    DispatchQueue.main.async {
-                        self.loaderView(isOn: false) {
-                            self.showAlert(title: .errorWord, message: .errorConfiguration) {
-                                self.dismiss(animated: true)
+                    DispatchQueue.main.async { [weak self] in
+                        self?.loaderView(isOn: false) {
+                            self?.showAlert(title: .errorWord, message: .errorConfiguration) {
+                                self?.dismiss(animated: true)
                             }
                         }
                     }
@@ -1011,7 +1011,8 @@ private extension PaymentOptionsForm {
             self.heightConstraint.isActive = isPresent
             self.view.backgroundColor = .black.withAlphaComponent(alpha)
             self.view.layoutIfNeeded()
-        } completion: { _ in
+        } completion: { [weak self] _ in
+            guard let _ = self else { return }
             completion()
         }
     }
