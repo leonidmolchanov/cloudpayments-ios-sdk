@@ -188,7 +188,8 @@ final class DemoViewController: BaseViewController {
         let recurrent = Recurrent(
             interval: "Month",
             period: 1,
-            customerReceipt: receipt
+            customerReceipt: receipt,
+            amount: 99.99
         )
         
         let payer = PaymentDataPayer(

@@ -68,14 +68,14 @@ public struct Receipt: Codable {
 }
 
 public struct Recurrent: Codable {
-    public let amount: Int?
+    public let amount: Float?
     public let interval: String
     public let period: Int
     public let startDate: String?
     public let maxPeriods: Int?
     public let customerReceipt: Receipt?
     
-    public init(interval: String, period: Int, customerReceipt: Receipt? = nil, amount: Int? = nil, startDate: String? = nil, maxPeriods: Int? = nil) {
+    public init(interval: String, period: Int, customerReceipt: Receipt? = nil, amount: Float? = nil, startDate: String? = nil, maxPeriods: Int? = nil) {
         self.interval = interval
         self.period = period
         self.customerReceipt = customerReceipt

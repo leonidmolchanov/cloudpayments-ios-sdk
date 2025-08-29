@@ -60,7 +60,7 @@ let recurrent = Recurrent(
             interval: "Month",
             period: 1,
             customerReceipt: receipt, 
-            amount: 100)
+            amount: 99.99)
 
 // Доп. поле, куда передается информация о плательщике. Используйте следующие параметры: FirstName, LastName, MiddleName, Birth, Street, Address, City, Country, Phone, Postcode
 let payer = PaymentDataPayer(firstName: "Test", lastName: "Testov", middleName: "Testovich", birth: "1955-02-22", address: "home 6", street: "Testovaya", city: "Moscow", country: "RU", phone: "89991234567", postcode: "12345")
@@ -540,6 +540,9 @@ public protocol ThreeDsDelegate: class {
 ```
 
 ### История обновлений:
+
+#### 1.6.3
+* Исправлена передача amount в объекте recurrent
 
 #### 1.6.2
 * Исправлена передача invoiceId
