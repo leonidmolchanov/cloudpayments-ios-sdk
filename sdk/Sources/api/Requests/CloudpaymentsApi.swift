@@ -265,8 +265,7 @@ public class CloudpaymentsApi {
         let successRedirectUrl = configuration.successRedirectUrl
         let failRedirectUrl = configuration.failRedirectUrl
         let invoiceId = configuration.paymentData.invoiceId
-        let description = configuration.paymentData.description
-        
+
         let metadata: [String: Any]? = {
             if let jsonString = configuration.paymentData.jsonData,
                let data = jsonString.data(using: .utf8) {
