@@ -286,7 +286,6 @@ public class CloudpaymentsApi {
             "paymentUrl": paymentUrl,
             "receiptEmail": email,
             "externalId": invoiceId,
-            "description": description,
             "userInfo": [
                 "accountId": accountId,
                 "firstName": payer?.firstName,
