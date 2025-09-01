@@ -44,13 +44,13 @@ public struct Receipt: Codable {
     public let amounts: Amounts?
     
     public struct Amounts: Codable {
-        public let electronic: Double
+        public let electronic: Decimal
         public let advancePayment: Double
         public let credit: Double
         public let provision: Double
         
         public init(electronic: Double, advancePayment: Double, credit: Double, provision: Double) {
-            self.electronic = electronic
+            self.electronic = Decimal(fromDouble: electronic)
             self.advancePayment = advancePayment
             self.credit = credit
             self.provision = provision
@@ -68,14 +68,14 @@ public struct Receipt: Codable {
 }
 
 public struct Recurrent: Codable {
-    public let amount: Float?
+    public let amount: Decimal?
     public let interval: String
     public let period: Int
     public let startDate: String?
     public let maxPeriods: Int?
     public let customerReceipt: Receipt?
     
-    public init(interval: String, period: Int, customerReceipt: Receipt? = nil, amount: Float? = nil, startDate: String? = nil, maxPeriods: Int? = nil) {
+    public init(interval: String, period: Int, customerReceipt: Receipt? = nil, amount: Decimal? = nil, startDate: String? = nil, maxPeriods: Int? = nil) {
         self.interval = interval
         self.period = period
         self.customerReceipt = customerReceipt
@@ -154,5 +154,16 @@ extension Recurrent {
         }
         
         return dict
+    }
+}
+
+
+extension Decimal {
+    /// Инициализатор из Double с округлением до `scale` знаков (по умолчанию 2)
+    init(fromDouble value: Double, scale: Int16 = 2, mode: NSDecimalNumber.RoundingMode = .plain) {
+        var d = Decimal(value)
+        var r = Decimal()
+        NSDecimalRound(&r, &d, Int(scale), mode)
+        self = r
     }
 }

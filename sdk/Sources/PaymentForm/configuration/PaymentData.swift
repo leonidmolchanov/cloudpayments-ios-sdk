@@ -93,7 +93,22 @@ public class PaymentData {
     }
     
     public func setAmount(_ amount: String) -> PaymentData {
-        self.amount = amount
+        if let decimal = Decimal(string: amount.replacingOccurrences(of: ",", with: ".")) {
+            var rounded = Decimal()
+            var src = decimal
+            NSDecimalRound(&rounded, &src, 2, .plain)
+            self.amount = NSDecimalNumber(decimal: rounded).stringValue
+        } else {
+            self.amount = amount
+        }
+        return self
+    }
+
+    internal func setAmount(decimal: Decimal) -> PaymentData {
+        var rounded = Decimal()
+        var src = decimal
+        NSDecimalRound(&rounded, &src, 2, .plain)
+        self.amount = NSDecimalNumber(decimal: rounded).stringValue
         return self
     }
     
