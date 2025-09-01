@@ -15,7 +15,6 @@ CloudPayments SDK позволяет интегрировать прием пл�
 pod 'Cloudpayments', :git =>  "https://gitpub.cloudpayments.ru/integrations/sdk/cloudpayments-ios", :branch => "master"
 pod 'CloudpaymentsNetworking', :git =>  "https://gitpub.cloudpayments.ru/integrations/sdk/cloudpayments-ios", :branch => "master"
 ```
-
 ### Структура проекта:
 
 * **demo** - Пример реализации приложения с использованием SDK
@@ -27,20 +26,6 @@ pod 'CloudpaymentsNetworking', :git =>  "https://gitpub.cloudpayments.ru/integra
 * использовать стандартную платежную форму Cloudpayments
 * реализовать свою платежную форму с использованием функций CloudpaymentsApi без вашего сервера
 * реализовать свою платежную форму, сформировать криптограмму и отправить ее на свой сервер
-
-## Инициализация CloudPaymentsSDK
-
-В `AppDelegate.swift` вашего проекта добавьте нотификацию `CloudtipsSDK` о событиях жизненного цикла приложения:
-
-```swift
-func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-    return true
-}
-
-func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
-    return true
-}
-```
 
 ### Использование стандартной платёжной формы от CloudPayments:
 
@@ -75,13 +60,13 @@ let recurrent = Recurrent(
             interval: "Month",
             period: 1,
             customerReceipt: receipt, 
-            amount: 100)
+            amount: 99.99)
 
 // Доп. поле, куда передается информация о плательщике. Используйте следующие параметры: FirstName, LastName, MiddleName, Birth, Street, Address, City, Country, Phone, Postcode
 let payer = PaymentDataPayer(firstName: "Test", lastName: "Testov", middleName: "Testovich", birth: "1955-02-22", address: "home 6", street: "Testovaya", city: "Moscow", country: "RU", phone: "89991234567", postcode: "12345")
     
 // Указывайте дополнительные данные если это необходимо
-let jsonData: [String: Any] = ["age":27, "name":"Ivan", "phone":"+79998881122"] // Любые другие данные, которые будут связаны с транзакцией, в том числе инструкции для создания подписки или формирования онлайн-чека должны обёртываться в объект cloudpayments. Мы зарезервировали названия следующих параметров и отображаем их содержимое в реестре операций, выгружаемом в Личном Кабинете: name, firstName, middleName, lastName, nick, phone, address, comment, birthDate.
+let jsonData = "\"age\":27, \"name\":\"Ivan\", \"phone\":\"+79998881122\"" // Любые другие данные, которые будут связаны с транзакцией, в том числе инструкции для создания подписки или формирования онлайн-чека должны обёртываться в объект cloudpayments. Мы зарезервировали названия следующих параметров и отображаем их содержимое в реестре операций, выгружаемом в Личном Кабинете: name, firstName, middleName, lastName, nick, phone, address, comment, birthDate.
 
 let paymentData = PaymentData() 
     .setAmount(String(totalAmount)) // Cумма платежа в валюте, максимальное количество не нулевых знаков после запятой: 2
@@ -351,38 +336,6 @@ let configuration = PaymentConfiguration.init(
 PaymentForm.present(with: configuration, from: self)
 ```
 
-4. Сканер карт
-
-Вы можете подключить любой сканер карт. Для этого нужно реализовать протокол PaymentCardScanner и передать объект, реализующий протокол, при создании PaymentConfiguration. Если протокол не будет реализован, то кнопка сканирования не будет показана
-
-Пример со сканером [CardIO](https://github.com/card-io/card.io-iOS-SDK)
-
-* Создайте контроллер со сканером и верните его в функции протокола PaymentCardScanner
-```
-extension CartViewController: PaymentCardScanner {
-    func startScanner(completion: @escaping (String?, UInt?, UInt?, String?) -> Void) -> UIViewController? {
-        self.scannerCompletion = completion
-        
-        let scanController = CardIOPaymentViewController.init(paymentDelegate: self)
-        return scanController
-    }
-}
-```
-* После завершения сканирования вызовите замыкание и передайте данные карты
-```
-extension CartViewController: CardIOPaymentViewControllerDelegate {
-    func userDidCancel(_ paymentViewController: CardIOPaymentViewController!) {
-        paymentViewController.dismiss(animated: true, completion: nil)
-    }
-    
-    func userDidProvide(_ cardInfo: CardIOCreditCardInfo!, in paymentViewController: CardIOPaymentViewController!) {
-        self.scannerCompletion?(cardInfo.cardNumber, cardInfo.expiryMonth, cardInfo.expiryYear, cardInfo.cvv)
-        paymentViewController.dismiss(animated: true, completion: nil)
-    }
-}
-```
-
-
 ### Использование вашей платежной формы с использованием функций CloudPaymentsApi:
 
 * **Для использования нового формата криптограммы:**
@@ -587,6 +540,16 @@ public protocol ThreeDsDelegate: class {
 ```
 
 ### История обновлений:
+
+#### 1.6.3
+* Исправлена передача amount в объекте recurrent
+
+#### 1.6.2
+* Исправлена передача invoiceId
+
+#### 1.6.1
+* Исправлены ошибки
+* Обновлена документация
 
 #### 1.6.0
 * Выполнен переход на новое API (только для стандартной формы)

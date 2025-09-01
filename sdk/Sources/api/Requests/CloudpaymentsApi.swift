@@ -264,6 +264,8 @@ public class CloudpaymentsApi {
         let receipt = configuration.paymentData.receipt?.toDictionary()
         let successRedirectUrl = configuration.successRedirectUrl
         let failRedirectUrl = configuration.failRedirectUrl
+        let invoiceId = configuration.paymentData.invoiceId
+        let description = configuration.paymentData.description
         
         let metadata: [String: Any]? = {
             if let jsonString = configuration.paymentData.jsonData,
@@ -284,6 +286,8 @@ public class CloudpaymentsApi {
             "amount": amount,
             "paymentUrl": paymentUrl,
             "receiptEmail": email,
+            "externalId": invoiceId,
+            "description": description,
             "userInfo": [
                 "accountId": accountId,
                 "firstName": payer?.firstName,
